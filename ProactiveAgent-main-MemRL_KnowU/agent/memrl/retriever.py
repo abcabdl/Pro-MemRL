@@ -12,7 +12,7 @@ from .formatters import (
     build_observation_text,
     build_simulation_context,
 )
-from .index import TfidfIndex
+from .index import EmbeddingIndex
 from .schema import enrich_memory_schema, infer_action_family, infer_context_family
 
 
@@ -78,16 +78,84 @@ def _evidence_side(memory: dict[str, Any]) -> str | None:
     return "abstain" if q_value > 0.0 else "intervene"
 
 
-def _extract_hint(text: str, key: str) -> str | None:
-    match = re.search(rf"\b{re.escape(key)}:([a-zA-Z0-9_@.-]+)", text)
+_PROFILE_RE = re.compile(r"(developer|student|grandma|user)")
+
+
+def _memory_profile(memory: dict[str, Any]) -> str | None:
+    labels = memory.get("labels", {}) if isinstance(memory.get("labels"), dict) else {}
+    if labels.get("profile_id"):
+        return str(labels["profile_id"])
+    for key in ("sample_id", "memory_id", "intent_text"):
+        match = _PROFILE_RE.search(str(memory.get(key, "") or ""))
+        if match:
+            return match.group(1)
+    return None
+
+
+def _memory_task_family(memory: dict[str, Any]) -> str | None:
+    labels = memory.get("labels", {}) if isinstance(memory.get("labels"), dict) else {}
+    if labels.get("task_family"):
+        return str(labels["task_family"])
+    for key in ("context_family", "action_family", "sample_id", "memory_id"):
+        match = re.search(
+            r"(?:knowu_profile_task_|knowu_|profile_task::|routine\.)([a-z0-9_]+)",
+            str(memory.get(key, "") or ""),
+        )
+        if match:
+            return match.group(1)
+    return None
+
+
+def _target_profile(query: str) -> str | None:
+    match = re.search(r"\bprofile:(developer|student|grandma|user)\b", query)
     return match.group(1) if match else None
+
+
+def _target_task_family(query: str) -> str | None:
+    for pattern in (
+        r"\btask_family:([a-z0-9_]+)\b",
+        r"\bcontext_family:knowu_profile_task_([a-z0-9_]+)\b",
+        r"\baction_family:knowu_profile_task_([a-z0-9_]+)\b",
+    ):
+        match = re.search(pattern, query)
+        if match:
+            return match.group(1)
+    return None
+
+
+def _transfer_gate(
+    memory: dict[str, Any],
+    *,
+    target_profile: str | None,
+    target_task_family: str | None,
+) -> float:
+    source_profile = _memory_profile(memory)
+    source_task = _memory_task_family(memory)
+    if not target_profile or not target_task_family or not source_profile or not source_task:
+        return 0.25
+
+    target_key = f"{target_profile}::{target_task_family}"
+    transfer_item = (memory.get("transfer_stats", {}) or {}).get(target_key, {})
+
+    if source_profile == target_profile and source_task == target_task_family:
+        base_gate = 1.0
+    elif source_profile != target_profile and source_task == target_task_family:
+        base_gate = 0.35
+    elif source_profile == target_profile and source_task != target_task_family:
+        base_gate = 0.05
+    else:
+        base_gate = 0.0
+
+    if "gate" in transfer_item:
+        return _clamp(_safe_float(transfer_item.get("gate"), base_gate), 0.0, 1.0)
+    return _clamp(base_gate, 0.0, 1.0)
 
 
 class MemRLRetriever:
     def __init__(self, *, topk: int = 8, sim_threshold: float = 0.18) -> None:
         self.topk = topk
         self.sim_threshold = sim_threshold
-        self.index = TfidfIndex()
+        self.index = EmbeddingIndex()
         self.memories: dict[str, dict[str, Any]] = {}
 
     def build(self, memories: list[dict[str, Any]]) -> None:
@@ -112,105 +180,33 @@ class MemRLRetriever:
             if part
         )
 
-    @staticmethod
-    def _knowu_query_hints(observations: list[dict[str, Any]]) -> dict[str, str]:
-        text = build_observation_text(observations).lower()
-        hints: dict[str, str] = {}
-        for key in ("profile", "task_family", "task_name"):
-            value = _extract_hint(text, key)
-            if value:
-                hints[key] = value
-        return hints
-
-    @staticmethod
-    def _knowu_label_boost(memory: dict[str, Any], hints: dict[str, str]) -> float:
-        if not hints:
-            return 1.0
-        source = str(memory.get("source", ""))
-        if source == "knowu_runtime_feedback":
-            return 0.35
-
-        labels = memory.get("labels", {}) or {}
-        boost = 1.0
-        profile = hints.get("profile")
-        task_family = hints.get("task_family")
-        task_name = hints.get("task_name")
-        if profile and str(labels.get("profile_id", "")).lower() == profile.lower():
-            boost *= 2.4
-        elif profile and source.startswith("knowu_"):
-            boost *= 0.45
-        if task_family and str(labels.get("task_family", "")).lower() == task_family.lower():
-            boost *= 2.6
-        elif task_family and f"knowu_profile_task_{task_family.lower()}" == str(
-            memory.get("context_family", "")
-        ).lower():
-            boost *= 1.8
-        elif task_family and source.startswith("knowu_"):
-            boost *= 0.5
-        if task_name and str(labels.get("task_name", "")).lower() == task_name.lower():
-            boost *= 3.0
-        return boost
-
-    def _inject_knowu_label_matches(
-        self,
-        ranked: list[dict[str, Any]],
-        *,
-        context_family: str,
-        action_family: str | None = None,
-        hints: dict[str, str] | None = None,
-    ) -> list[dict[str, Any]]:
-        hints = hints or {}
-        profile = hints.get("profile")
-        task_family = hints.get("task_family")
-        if not profile or not task_family or not context_family.startswith("knowu_profile_task_"):
-            return ranked
-
-        seen = {str(item["memory"].get("memory_id", "")) for item in ranked}
-        injected: list[dict[str, Any]] = []
-        for memory in self.memories.values():
-            if memory.get("source") != "knowu_profile_task_matrix_synthetic":
-                continue
-            labels = memory.get("labels", {}) or {}
-            if str(labels.get("profile_id", "")).lower() != profile.lower():
-                continue
-            if str(labels.get("task_family", "")).lower() != task_family.lower():
-                continue
-            if str(memory.get("memory_id", "")) in seen:
-                continue
-            memory_action = str(memory.get("action_family", "no_intervention"))
-            if action_family not in {None, "no_intervention"} and memory_action not in {
-                action_family,
-                "no_intervention",
-            }:
-                continue
-            q_value = _clamp(_safe_float(memory.get("q_value", memory.get("reward", 0.0))), -1.0, 1.0)
-            match_weight = 1.5 * self._knowu_label_boost(memory, hints)
-            injected.append(
-                {
-                    "memory": memory,
-                    "similarity": 1.0,
-                    "score": 1.0 + 0.2 * q_value,
-                    "adjusted_score": match_weight * (1.0 + 0.2 * q_value),
-                    "match_weight": match_weight,
-                    "evidence_score": match_weight * abs(q_value),
-                    "evidence_side": _evidence_side(memory),
-                }
-            )
-        if not injected:
-            return ranked
-        merged = [*ranked, *injected]
-        merged.sort(key=lambda item: _safe_float(item.get("adjusted_score", item["score"])), reverse=True)
-        return merged
-
     def _rank(self, query: str) -> list[dict[str, Any]]:
         ranked: list[dict[str, Any]] = []
-        for memory_id, sim in self.index.search(query, topk=max(self.topk * 8, self.topk, 24)):
+        target_profile = _target_profile(query)
+        target_task_family = _target_task_family(query)
+        for memory_id, sim in self.index.search(query, topk=len(self.memories)):
             if sim < self.sim_threshold:
                 continue
             memory = self.memories[memory_id]
-            q_value = _safe_float(memory.get("q_value", 0.0))
-            score = 0.7 * sim + 0.3 * max(min(q_value, 1.0), -1.0)
-            ranked.append({"memory": memory, "similarity": sim, "score": score})
+            q_value = _clamp(_safe_float(memory.get("q_value", 0.0)), -1.0, 1.0)
+            base_score = 0.7 * sim + 0.3 * abs(q_value)
+            transfer_gate = _transfer_gate(
+                memory,
+                target_profile=target_profile,
+                target_task_family=target_task_family,
+            )
+            score = transfer_gate * base_score
+            ranked.append(
+                {
+                    "memory": memory,
+                    "similarity": sim,
+                    "score": score,
+                    "base_score": base_score,
+                    "transfer_gate": transfer_gate,
+                    "target_profile": target_profile,
+                    "target_task_family": target_task_family,
+                }
+            )
         ranked.sort(key=lambda item: item["score"], reverse=True)
         return ranked
 
@@ -220,37 +216,23 @@ class MemRLRetriever:
         *,
         context_family: str,
         action_family: str | None = None,
-        hints: dict[str, str] | None = None,
     ) -> list[dict[str, Any]]:
         rescored: list[dict[str, Any]] = []
-        hints = hints or {}
         for item in ranked:
             memory = item["memory"]
-            memory_context = str(memory.get("context_family", "general"))
-            memory_action = str(memory.get("action_family", "no_intervention"))
-            context_boost = 1.35 if memory_context == context_family else 0.9
-            if context_family == "general" or memory_context == "general":
-                context_boost = max(context_boost, 1.0)
-            action_boost = 1.0
-            if action_family is not None:
-                action_boost = 1.35 if memory_action == action_family else 0.85
-                if action_family == "no_intervention" or memory_action == "no_intervention":
-                    action_boost = max(action_boost, 1.0)
-            label_boost = self._knowu_label_boost(memory, hints)
-            adjusted_score = item["score"] * context_boost * action_boost * label_boost
+            adjusted_score = item["score"]
             q_value = _clamp(_safe_float(memory.get("q_value", memory.get("reward", 0.0))), -1.0, 1.0)
-            match_weight = (
-                max(_safe_float(item.get("similarity", 0.0)), 1e-6)
-                * context_boost
-                * action_boost
-                * label_boost
+            match_weight = max(
+                _safe_float(item.get("similarity", 0.0))
+                * _safe_float(item.get("transfer_gate", 1.0), 1.0),
+                1e-6,
             )
             rescored.append(
                 {
                     **item,
                     "adjusted_score": adjusted_score,
                     "match_weight": match_weight,
-                    "evidence_score": match_weight * abs(q_value),
+                    "evidence_score": _safe_float(item.get("transfer_gate", 1.0), 1.0) * abs(q_value),
                     "evidence_side": _evidence_side(memory),
                 }
             )
@@ -265,24 +247,6 @@ class MemRLRetriever:
         context_family: str | None = None,
         action_family: str | None = None,
     ) -> list[dict[str, Any]]:
-        if str(context_family or "").startswith("knowu_profile_task_"):
-            exact = [
-                item for item in ranked
-                if str(item["memory"].get("context_family", "")) == context_family
-                and (
-                    action_family is None
-                    or action_family == "no_intervention"
-                    or str(item["memory"].get("action_family", "no_intervention"))
-                    in {action_family, "no_intervention"}
-                )
-            ]
-            if exact:
-                exact.sort(
-                    key=lambda item: _safe_float(item.get("evidence_score", 0.0)),
-                    reverse=True,
-                )
-                return exact[: self.topk]
-        limit = max(1, int(per_side or max(1, self.topk // 2)))
         intervene = [
             item for item in ranked
             if item.get("evidence_side") == "intervene"
@@ -294,8 +258,23 @@ class MemRLRetriever:
         intervene.sort(key=lambda item: _safe_float(item.get("evidence_score", 0.0)), reverse=True)
         abstain.sort(key=lambda item: _safe_float(item.get("evidence_score", 0.0)), reverse=True)
         if intervene and abstain:
-            count = min(limit, len(intervene), len(abstain))
-            selected = intervene[:count] + abstain[:count]
+            count = min(self.topk, len(intervene), len(abstain))
+            intervene_strength = sum(
+                _safe_float(item.get("evidence_score", 0.0))
+                for item in intervene[:count]
+            )
+            abstain_strength = sum(
+                _safe_float(item.get("evidence_score", 0.0))
+                for item in abstain[:count]
+            )
+            if intervene_strength > abstain_strength * 1.5:
+                selected = intervene[: self.topk]
+            elif abstain_strength > intervene_strength * 1.5:
+                selected = abstain[: self.topk]
+            else:
+                limit = max(1, int(per_side or max(1, self.topk // 2)))
+                count = min(limit, len(intervene), len(abstain))
+                selected = intervene[:count] + abstain[:count]
         else:
             selected = (intervene or abstain)[: self.topk]
         selected.sort(key=lambda item: _safe_float(item.get("evidence_score", 0.0)), reverse=True)
@@ -413,14 +392,8 @@ class MemRLRetriever:
             ]
             if part
         )
-        hints = self._knowu_query_hints(observations)
-        reranked = self._rerank(self._rank(query), context_family=context_family, hints=hints)
         ranked = self._balanced_evidence(
-            self._inject_knowu_label_matches(
-                reranked,
-                context_family=context_family,
-                hints=hints,
-            ),
+            self._rerank(self._rank(query), context_family=context_family),
             context_family=context_family,
         )
 
@@ -622,17 +595,8 @@ class MemRLRetriever:
     ) -> dict[str, Any]:
         context_family = infer_context_family(observations, signals)
         query = self._base_query(observations, signals)
-        hints = self._knowu_query_hints(observations)
         ranked = self._balanced_evidence(
-            self._inject_knowu_label_matches(
-                self._rerank(
-                    self._rank(query),
-                    context_family=context_family,
-                    hints=hints,
-                ),
-                context_family=context_family,
-                hints=hints,
-            ),
+            self._rerank(self._rank(query), context_family=context_family),
             context_family=context_family,
         )
         helpful_positive = [item for item in ranked if _value_bucket(item["memory"]) == "helpful_positive"]
@@ -705,7 +669,6 @@ class MemRLRetriever:
     ) -> dict[str, Any]:
         context_family = infer_context_family(observations, signals)
         action_family = infer_action_family(candidate)
-        hints = self._knowu_query_hints(observations)
         query = " | ".join(
             part for part in [
                 self._base_query(observations, signals),
@@ -716,17 +679,7 @@ class MemRLRetriever:
             ] if part
         )
         ranked = self._balanced_evidence(
-            self._inject_knowu_label_matches(
-                self._rerank(
-                    self._rank(query),
-                    context_family=context_family,
-                    action_family=action_family,
-                    hints=hints,
-                ),
-                context_family=context_family,
-                action_family=action_family,
-                hints=hints,
-            ),
+            self._rerank(self._rank(query), context_family=context_family, action_family=action_family),
             context_family=context_family,
             action_family=action_family,
         )
@@ -778,7 +731,6 @@ class MemRLRetriever:
     ) -> dict[str, Any]:
         context_family = infer_context_family(observations, signals)
         action_family = infer_action_family(candidate)
-        hints = self._knowu_query_hints(observations)
         query = " | ".join(
             part for part in [
                 self._base_query(observations, signals),
@@ -789,17 +741,7 @@ class MemRLRetriever:
             ] if part
         )
         ranked = self._balanced_evidence(
-            self._inject_knowu_label_matches(
-                self._rerank(
-                    self._rank(query),
-                    context_family=context_family,
-                    action_family=action_family,
-                    hints=hints,
-                ),
-                context_family=context_family,
-                action_family=action_family,
-                hints=hints,
-            ),
+            self._rerank(self._rank(query), context_family=context_family, action_family=action_family),
             context_family=context_family,
             action_family=action_family,
         )

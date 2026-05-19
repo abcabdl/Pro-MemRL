@@ -112,7 +112,7 @@ def _execute_single_task(
     logger.debug(f"task_score: {score}, reason: {reason}")
     traj_logger.log_score(score=score, reason=reason)
     if hasattr(agent, "record_task_outcome"):
-        agent.record_task_outcome(score)
+        agent.record_task_outcome(score, reason=reason, actions=actions)
 
     res = env.tear_down_task(task_type=task_name)
     agent.done()
@@ -337,7 +337,7 @@ def run_agent_with_evaluation(
         step_wait_time: Wait time after each step
         suite_family: Suite family to use
         task_tags: Optional task tags filter. Keeps tasks matching any specified tag.
-        user_log_mode: User log injection mode ('all' or 'rag')
+        user_log_mode: User context mode ('all', 'rag', or 'profile')
         rag_top_k: Number of top-k log entries for RAG mode
         user_log_source: User log source ('clean' or 'noise')
         **kwargs: Additional kwargs for agent creation

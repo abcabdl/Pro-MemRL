@@ -6,7 +6,7 @@ from loguru import logger
 
 from knowu_bench.runtime.utils.loader import UserProfileLoader
 from knowu_bench.runtime.utils.prompt_builder import PersonaPromptBuilder
-from knowu_bench.runtime.utils.user_log_context import build_user_log_context
+from knowu_bench.runtime.utils.user_log_context import build_user_log_context, get_user_log_config
 from knowu_bench.tasks.base import BaseTask
 
 
@@ -72,7 +72,24 @@ class BaseRoutineTask(BaseTask):
 
     def _build_goal(self, system_context: str = "", instruction: str | None = None) -> str:
         instruction_text = instruction or self.GOAL_INSTRUCTION
+        profile_only = get_user_log_config().get("mode") == "profile"
+        if profile_only and instruction is None:
+            instruction_text = instruction_text.replace(
+                "'User Activity Logs'",
+                "'User Profile'",
+            )
         system_context_block = f"{system_context}\n" if system_context else ""
+        if profile_only:
+            return (
+                "### USER PROFILE (No Historical Activity Logs)\n"
+                "The following profile describes the user's identity, habits, preferences, and decision criteria. "
+                "No prior activity log entries are provided in this ablation mode.\n"
+                f"{(self.persona_text or '').strip() or '- (No profile available)'}\n\n"
+                "System Status: Background Monitor Active.\n"
+                f"{system_context_block}"
+                "### INSTRUCTION\n"
+                f"{instruction_text}"
+            )
         return (
             "### USER ACTIVITY LOGS (Historical Context)\n"
             "The following logs show the user's consistent behavior over the past few weeks:\n"

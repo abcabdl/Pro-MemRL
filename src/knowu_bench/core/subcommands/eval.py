@@ -152,9 +152,9 @@ def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
         "--user-log-mode",
         "--user_log_mode",
         dest="user_log_mode",
-        choices=["all", "rag"],
+        choices=["all", "rag", "profile"],
         default="all",
-        help="User log injection mode: 'all' (default) or 'rag' (top-k by similarity)",
+        help="User context mode: 'all' full logs (default), 'rag' top-k logs, or 'profile' profile only with no historical logs",
     )
     parser.add_argument(
         "--rag-top-k",

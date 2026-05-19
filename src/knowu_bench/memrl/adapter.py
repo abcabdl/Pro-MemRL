@@ -332,6 +332,124 @@ def _commitment_level(task: Any) -> int:
     return _commitment_level_from_text(joined)
 
 
+def _initial_q_value(scenario_type: str, should_act: bool) -> float:
+    values = {
+        "strong_positive_habit": 0.18,
+        "positive_habit_evidence": 0.12,
+        "confirmation_boundary": 0.08,
+        "near_miss_abstain": 0.10,
+        "strong_abstain": 0.15,
+        "confirmation_boundary_abstain": 0.08,
+        "ambiguous_abstain": 0.05,
+    }
+    if scenario_type in values:
+        return values[scenario_type]
+    return 0.12 if should_act else 0.10
+
+
+def _scenario_type(*, has_habit: bool, variant_index: int) -> str:
+    idx = variant_index % 4
+    if has_habit:
+        return (
+            "strong_positive_habit"
+            if idx == 0
+            else "positive_habit_evidence"
+            if idx == 1
+            else "confirmation_boundary"
+            if idx == 2
+            else "near_miss_abstain"
+        )
+    return (
+        "strong_abstain"
+        if idx == 0
+        else "near_miss_abstain"
+        if idx == 1
+        else "confirmation_boundary_abstain"
+        if idx == 2
+        else "ambiguous_abstain"
+    )
+
+
+def _scenario_note(*, scenario_type: str, display: str) -> str:
+    notes = {
+        "strong_positive_habit": (
+            f"Independent habit evidence for {display}: comparable contexts repeatedly show this preference."
+        ),
+        "positive_habit_evidence": (
+            f"Alternate habit evidence for {display}: a different setting supports the same routine."
+        ),
+        "confirmation_boundary": (
+            f"Boundary evidence for {display}: the habit is plausible, but concrete action requires confirmation."
+        ),
+        "near_miss_abstain": (
+            f"Near-miss evidence for {display}: the context is related, but a required condition is absent or already handled."
+        ),
+        "strong_abstain": (
+            f"No-routine evidence for {display}: the profile has no established matching habit."
+        ),
+        "confirmation_boundary_abstain": (
+            f"Ambiguous boundary for {display}: do not proactively execute without stronger evidence."
+        ),
+        "ambiguous_abstain": (
+            f"Weak abstain evidence for {display}: routine-like background activity is not enough."
+        ),
+    }
+    return notes.get(scenario_type, f"Habit evidence for {display}.")
+
+
+def _scenario_context(*, spec: dict[str, Any], scenario_type: str) -> str:
+    display = str(spec["display"])
+    positive = tuple(spec.get("trigger_variants", ())) or (f"A {display} routine cue is present.",)
+    positive_0 = str(positive[0])
+    positive_1 = str(positive[1 % len(positive)])
+    positive_2 = str(positive[2 % len(positive)])
+    contexts = {
+        "strong_positive_habit": positive_0,
+        "positive_habit_evidence": (
+            f"Different supporting context for {display}: {positive_1}"
+        ),
+        "confirmation_boundary": (
+            f"Boundary context for {display}: {positive_2} A relevant cue is visible, "
+            "but the exact timing or user intent should be confirmed before any action."
+        ),
+        "near_miss_abstain": (
+            f"Near-miss for {display}: the screen resembles the routine context, "
+            "but the required condition is absent or the user has already handled it."
+        ),
+        "strong_abstain": (
+            f"No {display} trigger is active; the phone shows ordinary activity unrelated to this routine."
+        ),
+        "confirmation_boundary_abstain": (
+            f"Ambiguous {display} cue: a related app or notification is visible, "
+            "but there is not enough evidence to infer a routine trigger."
+        ),
+        "ambiguous_abstain": (
+            f"Weak background context near {display}: routine-like activity exists, "
+            "but timing, recipient, or required content is missing."
+        ),
+    }
+    return contexts.get(scenario_type, positive_0)
+
+
+def _habit_evidence_candidate(
+    *,
+    profile_id: str,
+    display: str,
+    should_act: bool,
+) -> dict[str, Any]:
+    if not should_act:
+        return {"purpose": None, "proactive_task": None, "response": None, "operation": "nop"}
+    return {
+        "purpose": f"Remember habit evidence for {profile_id}'s {display} routine.",
+        "proactive_task": (
+            f"Use this as evidence that {profile_id} may expect {display} support in a matching context; "
+            "ask for confirmation before any concrete action."
+        ),
+        "response": f"This is habit evidence for {display}; do not execute a concrete action from memory alone.",
+        "operation": None,
+    }
+
+
 def _candidate_for_task(task: Any, should_act: bool, level: int) -> dict[str, Any]:
     if not should_act:
         return {
@@ -877,10 +995,12 @@ def _task_matrix_episode(
     from agent.memrl.schema import enrich_memory_schema
 
     habit_name, habit = _first_matching_habit(profile, spec)
-    should_act = habit is not None
+    has_habit = habit is not None
     family = str(spec["task_family"])
-    trigger_variants = spec["trigger_variants"] if should_act else spec["negative_variants"]
-    trigger_text = str(trigger_variants[variant_index % len(trigger_variants)])
+    scenario_type = _scenario_type(has_habit=has_habit, variant_index=variant_index)
+    should_act = has_habit and scenario_type != "near_miss_abstain"
+    trigger_text = _scenario_context(spec=spec, scenario_type=scenario_type)
+    initial_q = _initial_q_value(scenario_type, should_act)
     observations = _log_window_observations_for_profile(
         profile_id,
         max_items=max_log_items,
@@ -891,12 +1011,14 @@ def _task_matrix_episode(
             "time": "current",
             "source": "synthetic_task_context",
             "event": _compact(
-                f"profile:{profile_id} task_family:{family} context:{trigger_text}",
+                f"profile:{profile_id} task_family:{family} scenario:{scenario_type} "
+                f"context:{trigger_text} note:{_scenario_note(scenario_type=scenario_type, display=str(spec['display']))}",
                 max_len=1200,
             ),
             "profile_id": profile_id,
             "task_family": family,
             "variant_index": variant_index,
+            "scenario_type": scenario_type,
         }
     )
 
@@ -920,22 +1042,17 @@ def _task_matrix_episode(
             }
         )
         level = _commitment_level_from_text(f"{family} {habit_name} {action_text}")
-        candidate = {
-            "purpose": f"Support {profile_id}'s {spec['display']} routine.",
-            "proactive_task": f"Execute {spec['display']} routine from profile habit '{habit_name}': {action_text}.",
-            "response": (
-                f"I noticed this matches your {spec['display']} routine. Would you like me to handle it now?"
-                if level == 1
-                else f"I can handle your {spec['display']} routine now."
-            ),
-            "operation": f"knowu.profile_task.{family}",
-        }
+        candidate = _habit_evidence_candidate(
+            profile_id=profile_id,
+            display=str(spec["display"]),
+            should_act=True,
+        )
         simulation = _simulation_for_decision(True)
         decision = {
             "should_intervene": True,
             "commitment_level": level,
             "risk": "medium" if level == 1 else "low",
-            "reason": "Profile-task matrix memory found a matching user habit for this routine family.",
+            "reason": f"Profile-task matrix memory stores non-executable habit evidence: {scenario_type}.",
         }
         action_family = f"knowu_profile_task_{family}"
         outcome_family = "helpful_intervention"
@@ -945,12 +1062,14 @@ def _task_matrix_episode(
                 "time": "long_term",
                 "source": "profile_task_absence",
                 "event": _compact(
-                    f"profile:{profile_id} task_family:{family} has no matching habit among "
-                    f"{', '.join(spec.get('habit_keys', ()))}, so proactive execution should be avoided.",
+                    f"profile:{profile_id} task_family:{family} scenario:{scenario_type}. "
+                    f"{_scenario_note(scenario_type=scenario_type, display=str(spec['display']))} "
+                    f"Matching habit keys considered: {', '.join(spec.get('habit_keys', ()))}.",
                     max_len=1000,
                 ),
                 "profile_id": profile_id,
                 "task_family": family,
+                "scenario_type": scenario_type,
             }
         )
         level = 0
@@ -961,7 +1080,7 @@ def _task_matrix_episode(
             "should_intervene": False,
             "commitment_level": 0,
             "risk": "low",
-            "reason": "Profile-task matrix memory found no matching habit; abstain.",
+            "reason": f"Profile-task matrix memory supports abstention: {scenario_type}.",
         }
         action_family = "no_intervention"
         outcome_family = "correct_abstain"
@@ -974,7 +1093,7 @@ def _task_matrix_episode(
         "domain": "mobile_routine",
         "observations": observations,
         "intent_text": _compact(
-            f"{profile_id} / {family} / variant {variant_index}: {trigger_text}",
+            f"{profile_id} / {family} / {scenario_type} / variant {variant_index}: {trigger_text}",
             max_len=2400,
         ),
         "context_family": f"knowu_profile_task_{family}",
@@ -993,10 +1112,12 @@ def _task_matrix_episode(
             "task_family": family,
             "task_name": None,
             "label_source": "profile_task_matrix_not_task_expectation",
+            "scenario_type": scenario_type,
+            "initial_q_value": initial_q,
         },
-        "reward": 1.0,
-        "q_value": 1.0,
-        "q_visits": 1,
+        "reward": initial_q,
+        "q_value": initial_q,
+        "q_visits": 0,
         "created_at": now,
         "updated_at": now,
     }
@@ -1262,7 +1383,7 @@ def build_knowu_profile_task_matrix_bundle(
     profile_dir: str | Path | None = None,
     max_log_items: int = 24,
     users: set[str] | None = None,
-    target_count: int = 300,
+    target_count: int = 256,
 ) -> dict[str, Any]:
     """Build a larger profile x routine-family memory matrix.
 
@@ -1290,10 +1411,10 @@ def build_knowu_profile_task_matrix_bundle(
     ]
     episodes: list[dict[str, Any]] = []
     variant_index = 0
-    while len(episodes) < target_count and base_pairs:
+    scenarios_per_pair = 3 if target_count <= len(base_pairs) * 3 else 4
+    target_count = len(base_pairs) * scenarios_per_pair
+    while variant_index < scenarios_per_pair and base_pairs:
         for profile_id, profile, spec in base_pairs:
-            if len(episodes) >= target_count:
-                break
             episodes.append(
                 _task_matrix_episode(
                     profile_id=profile_id,
@@ -1320,6 +1441,7 @@ def build_knowu_profile_task_matrix_bundle(
             "target_count": target_count,
             "routine_task_families": len(ROUTINE_TASK_SPECS),
             "base_profile_task_pairs": len(base_pairs),
+            "scenarios_per_profile_task_pair": scenarios_per_pair,
             "variants_generated": variant_index,
             "task_families": by_task_family,
         },

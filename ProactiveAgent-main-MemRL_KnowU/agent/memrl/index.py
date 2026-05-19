@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import math
+import os
 import re
 from collections import Counter
-from typing import Iterable
+from typing import Any, Iterable
 
 
 TOKEN_PATTERN = re.compile(r"[A-Za-z0-9_\u4e00-\u9fff]+")
@@ -76,3 +77,63 @@ class TfidfIndex:
         ]
         scored.sort(key=lambda item: item[1], reverse=True)
         return scored[:topk]
+
+
+class EmbeddingIndex:
+    """Cosine search over sentence embeddings, with TF-IDF fallback."""
+
+    def __init__(self, *, model_name: str | None = None) -> None:
+        self.model_name = model_name or os.getenv(
+            "MEMRL_EMBEDDING_MODEL",
+            "sentence-transformers/all-MiniLM-L6-v2",
+        )
+        self.doc_ids: list[str] = []
+        self.texts: list[str] = []
+        self.embeddings: Any = None
+        self.model: Any = None
+        self.enabled = False
+        self.fallback = TfidfIndex()
+
+    def build(self, doc_pairs: Iterable[tuple[str, str]]) -> None:
+        pairs = list(doc_pairs)
+        self.doc_ids = [doc_id for doc_id, _ in pairs]
+        self.texts = [text for _, text in pairs]
+        self.fallback.build(pairs)
+        try:
+            import numpy as np
+            from sentence_transformers import SentenceTransformer
+
+            self.model = SentenceTransformer(self.model_name)
+            self.embeddings = np.asarray(
+                self.model.encode(
+                    self.texts,
+                    normalize_embeddings=True,
+                    show_progress_bar=False,
+                ),
+                dtype="float32",
+            )
+            self.enabled = True
+        except Exception:
+            self.model = None
+            self.embeddings = None
+            self.enabled = False
+
+    def search(self, text: str, *, topk: int = 8) -> list[tuple[str, float]]:
+        if not self.enabled or self.model is None or self.embeddings is None:
+            return self.fallback.search(text, topk=topk)
+        try:
+            import numpy as np
+
+            query = np.asarray(
+                self.model.encode(
+                    [text],
+                    normalize_embeddings=True,
+                    show_progress_bar=False,
+                )[0],
+                dtype="float32",
+            )
+            sims = self.embeddings @ query
+            order = np.argsort(-sims)[:topk]
+            return [(self.doc_ids[int(idx)], float(sims[int(idx)])) for idx in order]
+        except Exception:
+            return self.fallback.search(text, topk=topk)

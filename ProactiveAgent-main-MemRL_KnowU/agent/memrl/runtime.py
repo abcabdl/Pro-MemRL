@@ -1,11 +1,73 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
 from .retriever import MemRLRetriever
-from .updater import update_q_value
+from .updater import update_q_value, update_transfer_value
+
+
+_PROFILE_RE = re.compile(r"(developer|student|grandma|user)")
+
+
+def _labels(memory: dict[str, Any]) -> dict[str, Any]:
+    labels = memory.get("labels", {}) if isinstance(memory.get("labels"), dict) else {}
+    return labels
+
+
+def _profile_id(memory: dict[str, Any]) -> str | None:
+    labels = _labels(memory)
+    if labels.get("profile_id"):
+        return str(labels["profile_id"])
+    for key in ("sample_id", "memory_id", "intent_text"):
+        match = _PROFILE_RE.search(str(memory.get(key, "") or ""))
+        if match:
+            return match.group(1)
+    return None
+
+
+def _task_family(memory: dict[str, Any]) -> str | None:
+    labels = _labels(memory)
+    if labels.get("task_family"):
+        return str(labels["task_family"])
+    task_name = str(labels.get("task_name") or memory.get("sample_id") or "")
+    mapping = {
+        "BatterySaverRoutineTask": "battery_saver",
+        "BirthdayWishTask": "birthday_wish",
+        "BluetoothMediaCleanupTask": "bluetooth_cleanup",
+        "ClockOutRoutineTask": "clock_out",
+        "ContactSaverTask": "contact_saver",
+        "DailyFamilyCallTask": "daily_family_call",
+        "DeepWorkRoutineTask": "deep_work",
+        "GalleryCleanupTask": "gallery_cleanup",
+        "MattermostOnCallTask": "mattermost_response",
+        "MorningPaperReadingTask": "morning_paper_reading",
+        "MorningWeatherCheckTask": "morning_weather_check",
+        "NightEyeCareRoutineTask": "night_eye_care",
+        "PreMeetingPrepTask": "pre_meeting_prep",
+        "ScamSmsInterceptRoutineTask": "scam_sms_intercept",
+        "WeekendSleeperTask": "weekend_sleeper",
+        "WeeklyReportRoutineTask": "weekly_report",
+    }
+    for prefix, family in mapping.items():
+        if prefix in task_name:
+            return family
+    for key in ("context_family", "action_family", "sample_id", "memory_id"):
+        match = re.search(
+            r"(?:knowu_profile_task_|knowu_|profile_task::|routine\.)([a-z0-9_]+)",
+            str(memory.get(key, "") or ""),
+        )
+        if match:
+            return match.group(1)
+    return None
+
+
+def _target_key(profile_id: str | None, task_family: str | None) -> str | None:
+    if not profile_id or not task_family:
+        return None
+    return f"{profile_id}::{task_family}"
 
 
 class ProactiveMemRLRuntime:
@@ -126,11 +188,25 @@ class ProactiveMemRLRuntime:
 
     def record_outcome(self, used_memory_ids: list[str], reward: float, episode: dict) -> None:
         appended = False
+        episode_labels = episode.get("labels", {}) if isinstance(episode.get("labels"), dict) else {}
+        target_profile = episode_labels.get("profile_id")
+        target_task = episode_labels.get("task_family")
+        target = _target_key(
+            str(target_profile) if target_profile else None,
+            str(target_task) if target_task else None,
+        )
         for memory_id in used_memory_ids:
             memory = self.memory_by_id.get(str(memory_id))
             if memory is None:
                 continue
-            update_q_value(memory, reward, alpha=self.alpha)
+            source_profile = _profile_id(memory)
+            source_task = _task_family(memory)
+            if not target:
+                update_q_value(memory, reward, alpha=self.alpha)
+            elif source_profile == target_profile and source_task == target_task:
+                update_q_value(memory, reward, alpha=self.alpha)
+            elif source_profile != target_profile and source_task == target_task:
+                update_transfer_value(memory, target, reward, alpha=self.alpha)
         if episode:
             candidate = dict(episode)
             if "memory_id" not in candidate and "sample_id" in candidate:

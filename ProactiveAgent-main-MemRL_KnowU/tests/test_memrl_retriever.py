@@ -58,7 +58,7 @@ def test_retrieve_generation_and_decision_priors() -> None:
         [
             _memory("p1", task="Inspect the traceback.", should=True, level=2, acceptance="accept", q_value=0.9),
             _memory("p2", task="Suggest a quick diff review.", should=True, level=1, acceptance="accept", q_value=0.7),
-            _memory("n1", task=None, should=False, level=0, acceptance="dismiss", q_value=0.8),
+            _memory("n1", task=None, should=False, level=0, acceptance="dismiss", q_value=0.2),
         ]
     )
     observations = [{"event": "The user debugs Python code in VS Code."}]

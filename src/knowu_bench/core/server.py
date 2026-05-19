@@ -643,7 +643,7 @@ def get_app_config_endpoint(app_name: str):
 @app.post("/suite_family/switch")
 def switch_suite_family(
     target_family: str = Query(..., description="Target suite family"),
-    user_log_mode: str = Query("all", description="User log mode: 'all' or 'rag'"),
+    user_log_mode: str = Query("all", description="User context mode: 'all', 'rag', or 'profile'"),
     rag_top_k: int = Query(10, description="Top-k entries for RAG mode"),
     rag_backend: str = Query("tfidf", description="RAG backend: 'tfidf' or 'embedding'"),
     user_log_source: str = Query("clean", description="User log source: 'clean' or 'noise'"),
@@ -663,7 +663,7 @@ def switch_suite_family(
 
     Args:
         target_family: Either "knowu_bench"
-        user_log_mode: User log injection mode ('all' or 'rag')
+        user_log_mode: User context mode ('all', 'rag', or 'profile')
         rag_top_k: Number of top-k log entries for RAG mode
         rag_backend: RAG backend ('tfidf' or 'embedding')
         user_log_source: User log source ('clean' or 'noise')

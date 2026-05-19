@@ -69,8 +69,11 @@ def main() -> None:
     parser.add_argument(
         "--target-count",
         type=int,
-        default=300,
-        help="Target number of memories for --source profile-task-matrix.",
+        default=256,
+        help=(
+            "Requested memory count for --source profile-task-matrix. "
+            "The builder emits 3 or 4 diverse scenarios per profile x routine cell."
+        ),
     )
     args = parser.parse_args()
     users = {item.strip() for item in args.users.split(",") if item.strip()} or None

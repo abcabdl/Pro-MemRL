@@ -8,7 +8,7 @@ import psycopg2
 from loguru import logger
 from psycopg2 import Error
 
-MATTERMOST_DOCKER_DIR = "/app/mattermost-docker"
+MATTERMOST_DOCKER_DIR = os.getenv("MATTERMOST_DOCKER_DIR", "/app/mattermost-docker")
 COMPOSE_FILES = ["-f", "docker-compose.yml", "-f", "docker-compose.without-nginx.yml"]
 MATTERMOST_DB_HOST = "localhost"
 MATTERMOST_DB_DATABASE = "mattermost"
@@ -16,7 +16,7 @@ MATTERMOST_DB_USER = "mmuser"
 MATTERMOST_DB_PASSWORD = "mmuser_password"
 MATTERMOST_DB_PORT = "5433"
 
-MATTERMOST_STATUS_DIR = "/app/mattermost-docker-bk"
+MATTERMOST_STATUS_DIR = os.getenv("MATTERMOST_STATUS_DIR", "/app/mattermost-docker-bk")
 SAM_HARRY_CHANNEL_ID = "m3d6byju9ig4dneosajg9hu1be"
 HARRY_ID = "p11jse4oa3biikeeefcuggns9o"
 PHOENIX_CHANNEL_ID = "6xntskboopfwxysbdebkzqyckh"
@@ -765,7 +765,13 @@ def get_mattermost_backend_status():
     try:
         cmd = ["docker", "compose", "ps", "--format", "json"]
         result = subprocess.run(
-            cmd, cwd=MATTERMOST_DOCKER_DIR, capture_output=True, text=True, check=True
+            cmd,
+            cwd=MATTERMOST_DOCKER_DIR,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=True,
         )
 
         if not result.stdout.strip():
@@ -813,7 +819,13 @@ def get_mattermost_services_info():
     try:
         cmd = ["docker", "compose", "ps"]
         result = subprocess.run(
-            cmd, cwd=MATTERMOST_DOCKER_DIR, capture_output=True, text=True, check=True
+            cmd,
+            cwd=MATTERMOST_DOCKER_DIR,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=True,
         )
         return result.stdout
     except subprocess.CalledProcessError as e:

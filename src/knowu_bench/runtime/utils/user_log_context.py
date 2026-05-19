@@ -169,6 +169,10 @@ def build_user_log_context(
 ) -> str:
     from loguru import logger
 
+    if _log_config["mode"] == "profile":
+        logger.info("[UserLog] Using PROFILE mode (no historical activity logs)")
+        return ""
+
     log_path = resolve_user_log_path(
         user_profile,
         profile_path=profile_path,

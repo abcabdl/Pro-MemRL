@@ -70,7 +70,7 @@ class AndroidEnvClient:
 
         Args:
             target_family: Either "knowu_bench"
-            user_log_mode: User log injection mode ('all' or 'rag')
+            user_log_mode: User context mode ('all', 'rag', or 'profile')
             rag_top_k: Number of top-k log entries for RAG mode
             rag_backend: RAG backend ('tfidf' or 'embedding')
             user_log_source: User log source ('clean' or 'noise')

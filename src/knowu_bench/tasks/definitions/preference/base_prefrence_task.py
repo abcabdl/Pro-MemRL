@@ -20,7 +20,7 @@ from openai import OpenAI
 
 from knowu_bench.runtime.utils.loader import UserProfileLoader
 from knowu_bench.runtime.utils.prompt_builder import PersonaPromptBuilder
-from knowu_bench.runtime.utils.user_log_context import build_user_log_context
+from knowu_bench.runtime.utils.user_log_context import build_user_log_context, get_user_log_config
 from knowu_bench.runtime.controller import AndroidController
 from knowu_bench.tasks.base import BaseTask
 
@@ -80,6 +80,13 @@ class BasePrefrenceTask(BaseTask, ABC):
         return False
 
     def _build_user_logs_section(self) -> str:
+        if get_user_log_config().get("mode") == "profile":
+            return (
+                "### USER PROFILE (No Historical Activity Logs)\n"
+                "The following profile describes the user's identity, habits, preferences, and decision criteria. "
+                "No prior activity log entries are provided in this ablation mode.\n"
+                f"{self.persona_text or '- (No profile available)'}"
+            )
         logs = (self.user_log_context or "").strip() or "- (No logs available)"
         return "### USER ACTIVITY LOGS (Historical Context)\n" + logs
 

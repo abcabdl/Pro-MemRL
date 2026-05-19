@@ -1,0 +1,56 @@
+{
+  "name": "habit_switch_birthday_existing_profiles",
+  "description": "Concept-drift smoke schedule using existing profile variants: early rounds use a no-birthday-habit profile that should reject/silence; later rounds switch to a profile with birthday_wish_routine that should accept and act. This avoids modifying task definitions while exercising the same memory-state pipeline.",
+  "rounds": [
+    {
+      "name": "pre_switch_reject_1",
+      "phase": "pre_switch_old_habit",
+      "user": "grandma",
+      "tasks": [
+        "BirthdayWishTask@grandma",
+        "ContactSaverTask@grandma",
+        "WeeklyReportRoutineTask@grandma"
+      ]
+    },
+    {
+      "name": "pre_switch_reject_2",
+      "phase": "pre_switch_old_habit",
+      "user": "grandma",
+      "tasks": [
+        "BirthdayWishTask@grandma",
+        "WeekendSleeperTask@grandma",
+        "MorningWeatherCheckTask@grandma"
+      ]
+    },
+    {
+      "name": "switch_accept_evidence",
+      "phase": "switch_evidence",
+      "user": "student",
+      "tasks": [
+        "BirthdayWishTask@student",
+        "NightEyeCareRoutineTask@student",
+        "BluetoothMediaCleanupTask@student"
+      ]
+    },
+    {
+      "name": "post_switch_probe_1",
+      "phase": "post_switch_probe",
+      "user": "student",
+      "tasks": [
+        "BirthdayWishTask@student",
+        "DeepWorkRoutineTask@student",
+        "ScamSmsInterceptRoutineTask@student"
+      ]
+    },
+    {
+      "name": "post_switch_probe_2",
+      "phase": "post_switch_probe",
+      "user": "student",
+      "tasks": [
+        "BirthdayWishTask@student",
+        "BluetoothMediaCleanupTask@student",
+        "NightEyeCareRoutineTask@student"
+      ]
+    }
+  ]
+}

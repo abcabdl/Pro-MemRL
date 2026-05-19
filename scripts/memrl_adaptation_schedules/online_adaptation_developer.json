@@ -1,0 +1,57 @@
+{
+  "name": "online_adaptation_developer",
+  "description": "Five-round schedule for online habit adaptation using existing developer routine tasks. Early rounds provide evidence tasks; later rounds probe related held-out routine families without changing task definitions.",
+  "user": "developer",
+  "rounds": [
+    {
+      "name": "cold_start_silence_probe",
+      "phase": "cold_start",
+      "tasks": [
+        "BirthdayWishTask@developer",
+        "ContactSaverTask@developer",
+        "WeeklyReportRoutineTask@developer",
+        "ScamSmsInterceptRoutineTask@developer"
+      ]
+    },
+    {
+      "name": "settings_habit_evidence",
+      "phase": "learnable_evidence",
+      "tasks": [
+        "BatterySaverRoutineTask@developer",
+        "NightEyeCareRoutineTask@developer",
+        "BluetoothMediaCleanupTask@developer",
+        "DeepWorkRoutineTask@developer"
+      ]
+    },
+    {
+      "name": "communication_habit_evidence",
+      "phase": "learnable_evidence",
+      "tasks": [
+        "ClockOutRoutineTask@developer",
+        "MattermostOnCallTask@developer",
+        "PreMeetingPrepTask@developer",
+        "MorningWeatherCheckTask@developer"
+      ]
+    },
+    {
+      "name": "heldout_mixed_probe",
+      "phase": "heldout_probe",
+      "tasks": [
+        "GalleryCleanupTask@developer",
+        "WeekendSleeperTask@developer",
+        "MorningPaperReadingTask@developer",
+        "DailyFamilyCallTask@developer"
+      ]
+    },
+    {
+      "name": "adaptation_retention_probe",
+      "phase": "heldout_probe",
+      "tasks": [
+        "BluetoothMediaCleanupTask@developer",
+        "ClockOutRoutineTask@developer",
+        "MattermostOnCallTask@developer",
+        "BatterySaverRoutineTask@developer"
+      ]
+    }
+  ]
+}
