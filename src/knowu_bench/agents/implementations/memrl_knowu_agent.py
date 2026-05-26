@@ -178,8 +178,27 @@ class MemRLKnowUAgentMCP(MCPAgent):
         level = int(decision.get("commitment_level", decision.get("level", 0)) or 0)
         should = bool(decision.get("should_intervene", False))
         self.phase = "abstain" if not should or level <= 0 else "ask" if level == 1 else "delegate"
+        if self._should_delegate_unknown_family_abstain():
+            self.phase = "delegate"
+            self.plan["unknown_family_abstain_delegate"] = True
+            logger.info(
+                "Delegating unknown-family MemRL abstain to the base GUI executor for {}",
+                self.task_name,
+            )
+            self.executor.initialize(instruction)
+            return
         augmented_instruction = self._augment_instruction(instruction)
         self.executor.initialize(augmented_instruction)
+
+    def _should_delegate_unknown_family_abstain(self) -> bool:
+        if not _env_flag("KNOWU_MEMRL_DELEGATE_UNKNOWN_FAMILY_ABSTAIN", False):
+            return False
+        if self.phase != "abstain":
+            return False
+        for observation in self.plan.get("observations", []) or []:
+            if observation.get("source") == "knowu_memrl_retrieval_hint":
+                return observation.get("task_family") in {None, "", "null"}
+        return False
 
     def _augment_instruction(self, instruction: str) -> str:
         decision = self.plan.get("decision", {}) or {}
@@ -799,6 +818,16 @@ class MemRLKnowUAgentMCP(MCPAgent):
                 for candidate_channel in self._mattermost_channel_candidates(channel):
                     sent = cli.send_message(team, candidate_channel, message)
                     if sent:
+                        verified_message = self._wait_for_mattermost_post(
+                            candidate_channel, message
+                        )
+                        if verified_message is None:
+                            logger.warning(
+                                "Direct Mattermost send returned success but DB verification failed for channel={}",
+                                candidate_channel,
+                            )
+                            sent = False
+                            continue
                         channel = candidate_channel
                         break
                 if not sent:
@@ -810,14 +839,6 @@ class MemRLKnowUAgentMCP(MCPAgent):
                     return None
             finally:
                 cli.logout()
-
-            verified_message = self._wait_for_mattermost_post(channel, message)
-            if verified_message is None:
-                logger.warning(
-                    "Direct Mattermost send returned success but DB verification failed for channel={}",
-                    channel,
-                )
-                return None
 
             logger.info("Direct Mattermost send succeeded for {}:{}: {}", team, channel, message)
             return {
@@ -873,7 +894,7 @@ class MemRLKnowUAgentMCP(MCPAgent):
         profile = self._profile_id()
         if not profile:
             return {}
-        path = Path(__file__).resolve().parents[2] / "knowu_bench" / "user_profile" / f"{profile}.yaml"
+        path = Path(__file__).resolve().parents[2] / "user_profile" / f"{profile}.yaml"
         try:
             with path.open("r", encoding="utf-8") as handle:
                 return yaml.safe_load(handle) or {}
@@ -965,5 +986,8 @@ class MemRLKnowUAgentMCP(MCPAgent):
             "reason": decision.get("reason", ""),
             "candidate_task": candidate.get("proactive_task"),
             "direct_actions_enabled": self.direct_actions_enabled,
+            "unknown_family_abstain_delegate": bool(
+                self.plan.get("unknown_family_abstain_delegate", False)
+            ),
             "used_memory_ids": self.used_memory_ids[:6],
         }

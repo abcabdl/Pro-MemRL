@@ -145,6 +145,27 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--rag-top-k", type=int, default=10)
     parser.add_argument("--rag-backend", choices=["tfidf", "embedding"], default="tfidf")
     parser.add_argument("--step-wait-time", type=float, default=1.0)
+    parser.add_argument(
+        "--fail-on-missing-results",
+        action="store_true",
+        help="Return a non-zero status if an explicit task list produces fewer result.txt files than assigned tasks.",
+    )
+    parser.add_argument(
+        "--delegate-unknown-family-abstain",
+        action="store_true",
+        help=(
+            "When MemRL cannot map a task to a task_family and would abstain, delegate to "
+            "the normal GUI executor instead of finishing immediately."
+        ),
+    )
+    parser.add_argument(
+        "--live-profile-routine-hints",
+        action="store_true",
+        help=(
+            "Use the currently active profile snapshot as a routine hint before retrieval. "
+            "This is intended for same-user profile-drift experiments."
+        ),
+    )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("extra_args", nargs=argparse.REMAINDER, help="Extra args passed to `uv run mw eval`.")
     return parser
@@ -267,6 +288,10 @@ def main() -> int:
         env["KNOWU_MEMRL_STATE_DIR"] = str(state_dir)
         env["KNOWU_MEMRL_BOOTSTRAP"] = str(bootstrap)
         env["KNOWU_MEMRL_FREEZE_UPDATES"] = "true" if freeze_updates else "false"
+        if args.delegate_unknown_family_abstain:
+            env["KNOWU_MEMRL_DELEGATE_UNKNOWN_FAMILY_ABSTAIN"] = "true"
+        if args.live_profile_routine_hints:
+            env["KNOWU_MEMRL_USE_LIVE_PROFILE_ROUTINE_HINTS"] = "true"
 
         print(f"[adaptation] round {idx}/{len(rounds)} phase={phase} user={user} tasks={task_arg}")
         print(f"[adaptation] command: {' '.join(command)}")
@@ -338,6 +363,17 @@ def main() -> int:
         if return_code != 0:
             print(f"[adaptation] round {idx} failed; see {run_log}", file=sys.stderr)
             return return_code
+        if (
+            args.fail_on_missing_results
+            and not args.dry_run
+            and task_arg.upper() != "ALL"
+            and with_results < assigned
+        ):
+            print(
+                f"[adaptation] round {idx} missing results: {with_results}/{assigned}; see {run_log}",
+                file=sys.stderr,
+            )
+            return 2
         prev_scores = scores
         prev_successful = successful
 

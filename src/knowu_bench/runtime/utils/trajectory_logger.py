@@ -9,6 +9,7 @@ from knowu_bench.runtime.utils.models import Observation
 
 
 def save_screenshot(screenshot, path) -> None:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
     screenshot.save(path)
     logger.info(f"Screenshot saved in {path}")
 
@@ -74,6 +75,10 @@ SCORE_FILE_NAME = "result.txt"
 MEMRL_PLAN_FILE_NAME = "memrl_plan.json"
 
 
+def screenshot_filename(task_id: str, step: int) -> str:
+    return f"step-{task_id}-{step}.png"
+
+
 class TrajLogger:
     def __init__(self, log_file_root: str, task_name: str):
         self.log_file_dir = os.path.join(log_file_root, task_name)
@@ -133,7 +138,7 @@ class TrajLogger:
             json.dump(log_data, f, ensure_ascii=False, indent=4)
 
         original_screenshot_path = os.path.join(
-            self.log_file_dir, self.screenshots_dir, f"{task_name}-{task_id}-{step}.png"
+            self.log_file_dir, self.screenshots_dir, screenshot_filename(task_id, step)
         )
         save_screenshot(obs.screenshot, original_screenshot_path)
 
@@ -143,7 +148,7 @@ class TrajLogger:
             marked_screenshot_path = os.path.join(
                 self.log_file_dir,
                 self.marked_screenshots_dir,
-                f"marked-{task_name}-{task_id}-{step}.png",
+                f"marked-{screenshot_filename(task_id, step)}",
             )
             draw_clicks_on_image(
                 original_screenshot_path, marked_screenshot_path, click_coordinates
@@ -153,7 +158,7 @@ class TrajLogger:
             marked_screenshot_path = os.path.join(
                 self.log_file_dir,
                 self.marked_screenshots_dir,
-                f"marked-{task_name}-{task_id}-{step}.png",
+                f"marked-{screenshot_filename(task_id, step)}",
             )
             draw_drag_on_image(original_screenshot_path, marked_screenshot_path, drag_coordinates)
 

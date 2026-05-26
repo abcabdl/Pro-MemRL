@@ -1,0 +1,59 @@
+{
+  "name": "same_user_shopping_platform_drift",
+  "description": "Same-user preference drift experiment. The profile id stays developer in every round; only the shopping-platform preference is swapped. The old snapshot keeps the original developer preference for jingdian. The new snapshot changes the same user's shopping preference to Taodian, without changing task logic or task prompts.",
+  "profile_id": "developer",
+  "rounds": [
+    {
+      "name": "old_shopping_evidence_1",
+      "phase": "old_preference_evidence",
+      "profile_overlay": "scripts/memrl_adaptation_schedules/profile_overlays/developer_drift_shopping_jingdian_old.yaml",
+      "task_tags": "preference",
+      "tasks": [
+        "BuyColaPreferenceTask",
+        "SearchWhiteSneakersCheckoutPreferenceAskUserTask"
+      ]
+    },
+    {
+      "name": "old_shopping_evidence_2",
+      "phase": "old_preference_evidence",
+      "profile_overlay": "scripts/memrl_adaptation_schedules/profile_overlays/developer_drift_shopping_jingdian_old.yaml",
+      "task_tags": "preference",
+      "tasks": [
+        "BuyComputerPreferenceAskUserTask",
+        "NoteTheCourierForDeliveryPreferenceAskUserTask"
+      ]
+    },
+    {
+      "name": "new_shopping_evidence_1",
+      "phase": "new_preference_evidence",
+      "profile_overlay": "scripts/memrl_adaptation_schedules/profile_overlays/developer_drift_shopping_taodian_new.yaml",
+      "task_tags": "preference",
+      "tasks": [
+        "BuyColaPreferenceTask",
+        "SearchWhiteSneakersCheckoutPreferenceAskUserTask"
+      ]
+    },
+    {
+      "name": "new_shopping_evidence_2",
+      "phase": "new_preference_evidence",
+      "profile_overlay": "scripts/memrl_adaptation_schedules/profile_overlays/developer_drift_shopping_taodian_new.yaml",
+      "task_tags": "preference",
+      "tasks": [
+        "BuyComputerPreferenceAskUserTask",
+        "NoteTheCourierForDeliveryPreferenceAskUserTask"
+      ]
+    },
+    {
+      "name": "post_switch_probe",
+      "phase": "post_switch_probe",
+      "profile_overlay": "scripts/memrl_adaptation_schedules/profile_overlays/developer_drift_shopping_taodian_new.yaml",
+      "task_tags": "preference",
+      "tasks": [
+        "BuyColaPreferenceTask",
+        "SearchWhiteSneakersCheckoutPreferenceAskUserTask",
+        "BuyComputerPreferenceAskUserTask",
+        "NoteTheCourierForDeliveryPreferenceAskUserTask"
+      ]
+    }
+  ]
+}

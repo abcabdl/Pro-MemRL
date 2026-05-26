@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from loguru import logger
+import yaml
 
 from knowu_bench.memrl.adapter import default_bundle_path, utc_now
 from knowu_bench.memrl.paths import ensure_embedded_memrl_importable
@@ -87,6 +88,25 @@ _ROUTINE_TASK_FAMILY: dict[str, str] = {
     "ScamSmsInterceptRoutineTask": "scam_sms_intercept",
     "WeekendSleeperTask": "weekend_sleeper",
     "WeeklyReportRoutineTask": "weekly_report",
+}
+
+_TASK_FAMILY_HABIT_KEY: dict[str, str] = {
+    "battery_saver": "low_battery_saver",
+    "birthday_wish": "birthday_wish",
+    "bluetooth_cleanup": "bluetooth_cleanup",
+    "clock_out": "clock_out_routine",
+    "contact_saver": "contact_saver",
+    "daily_family_call": "daily_family_call",
+    "deep_work": "deep_work_block",
+    "gallery_cleanup": "gallery_cleanup",
+    "mattermost_response": "on_call_response",
+    "morning_paper_reading": "morning_paper_reading",
+    "morning_weather_check": "morning_weather_check",
+    "night_eye_care": "night_eye_care",
+    "pre_meeting_prep": "pre_meeting_prep",
+    "scam_sms_intercept": "scam_sms_intercept",
+    "weekend_sleeper": "weekend_sleeper",
+    "weekly_report": "weekly_report",
 }
 
 
@@ -225,6 +245,13 @@ class KnowUMemRLBridge:
         observations = _parse_instruction_observations(instruction, task_name)
         self._append_retrieval_hints(observations, task_name)
         direct_shortcuts_enabled = _env_flag("KNOWU_MEMRL_USE_DIRECT_SHORTCUTS")
+        live_profile_hints_enabled = _env_flag("KNOWU_MEMRL_USE_LIVE_PROFILE_ROUTINE_HINTS")
+        if live_profile_hints_enabled:
+            live_profile = self._live_profile_routine_plan(observations, task_name)
+            if live_profile is not None:
+                self.last_plan = live_profile
+                return live_profile
+
         if direct_shortcuts_enabled:
             profile_task = self._profile_task_matrix_plan(observations, task_name)
             if profile_task is not None:
@@ -309,6 +336,7 @@ class KnowUMemRLBridge:
             "source": "retrieved_knowu_memory",
             "memrl_chain": "generation->simulation->decision",
             "direct_shortcuts_enabled": direct_shortcuts_enabled,
+            "live_profile_hints_enabled": live_profile_hints_enabled,
             "observations": observations,
             "signals": signals,
             "candidate": candidate,
@@ -672,6 +700,78 @@ class KnowUMemRLBridge:
                 "confidence": min(1.0, best[0] / 8.0),
                 "reason": "matched generated profile-habit memory by current observation keywords",
                 "profile_habit_score": round(best[0], 4),
+            },
+        }
+
+    def _live_profile_routine_plan(
+        self,
+        observations: list[dict[str, Any]],
+        task_name: str | None,
+    ) -> dict[str, Any] | None:
+        profile_id = _profile_id_from_task_name(task_name)
+        task_family = _routine_family_from_task_name(task_name)
+        if not profile_id or not task_family:
+            return None
+        habit_key = _TASK_FAMILY_HABIT_KEY.get(task_family)
+        if not habit_key:
+            return None
+
+        profile_path = Path(__file__).resolve().parents[1] / "user_profile" / f"{profile_id}.yaml"
+        try:
+            data = yaml.safe_load(profile_path.read_text(encoding="utf-8")) or {}
+        except Exception:
+            logger.exception("Failed to read live KnowU profile for MemRL hint: {}", profile_path)
+            return None
+
+        habit = (((data.get("user_profile") or {}).get("habits") or {}).get(habit_key) or {})
+        if not habit:
+            return None
+
+        action = habit.get("action") or {}
+        detail = (
+            action.get("detail")
+            or habit.get("description")
+            or f"Follow the user's current {habit_key} routine."
+        )
+        candidate = {
+            "purpose": f"Follow the current live profile habit: {habit_key}.",
+            "proactive_task": str(detail),
+            "response": f"This matches your {habit_key} routine. I can handle it now.",
+            "operation": f"knowu.live_profile.{task_family}",
+        }
+        decision = {
+            "should_intervene": True,
+            "commitment_level": 2,
+            "risk": "medium",
+            "reason": (
+                "The active profile snapshot currently contains this routine habit; "
+                "use it as the newest profile preference in the same-user drift branch."
+            ),
+        }
+        candidate, decision = self._normalize_profile_task_decision(
+            task_family=task_family,
+            candidate=candidate,
+            decision=decision,
+        )
+        return {
+            "source": "live_profile_routine_hint",
+            "observations": observations,
+            "candidate": candidate,
+            "simulation": {
+                "acceptance": "accept",
+                "acceptance_confidence": 0.9,
+                "relevance": "high",
+                "reasoning": f"Active profile has habit {habit_key}.",
+            },
+            "decision": decision,
+            "used_memory_ids": [],
+            "memory_prior": {
+                "confidence": 1.0,
+                "reason": "matched the currently active profile habit for this routine task",
+                "profile_id": profile_id,
+                "task_family": task_family,
+                "habit_key": habit_key,
+                "profile_path": str(profile_path),
             },
         }
 

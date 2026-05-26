@@ -1,0 +1,58 @@
+{
+  "name": "same_user_gallery_cleanup_drift",
+  "description": "Same-user profile drift experiment using a stable routine task from normal eval. The profile id stays developer. Old rounds have no gallery_cleanup habit, so GalleryCleanupTask should abstain. New rounds add only gallery_cleanup, so the same task should adapt and clean screenshots according to the new profile policy.",
+  "profile_id": "developer",
+  "rounds": [
+    {
+      "name": "old_no_gallery_cleanup_evidence_1",
+      "phase": "old_preference_evidence",
+      "profile_overlay": "scripts/memrl_adaptation_schedules/profile_overlays/developer_drift_gallery_old.yaml",
+      "tasks": [
+        "GalleryCleanupTask",
+        "BatterySaverRoutineTask",
+        "NightEyeCareRoutineTask"
+      ]
+    },
+    {
+      "name": "old_no_gallery_cleanup_evidence_2",
+      "phase": "old_preference_evidence",
+      "profile_overlay": "scripts/memrl_adaptation_schedules/profile_overlays/developer_drift_gallery_old.yaml",
+      "tasks": [
+        "GalleryCleanupTask",
+        "DeepWorkRoutineTask",
+        "MorningPaperReadingTask"
+      ]
+    },
+    {
+      "name": "new_gallery_cleanup_evidence_1",
+      "phase": "new_preference_evidence",
+      "profile_overlay": "scripts/memrl_adaptation_schedules/profile_overlays/developer_drift_gallery_new.yaml",
+      "tasks": [
+        "GalleryCleanupTask",
+        "BatterySaverRoutineTask",
+        "NightEyeCareRoutineTask"
+      ]
+    },
+    {
+      "name": "new_gallery_cleanup_evidence_2",
+      "phase": "new_preference_evidence",
+      "profile_overlay": "scripts/memrl_adaptation_schedules/profile_overlays/developer_drift_gallery_new.yaml",
+      "tasks": [
+        "GalleryCleanupTask",
+        "DeepWorkRoutineTask",
+        "MorningPaperReadingTask"
+      ]
+    },
+    {
+      "name": "post_switch_gallery_probe",
+      "phase": "post_switch_probe",
+      "profile_overlay": "scripts/memrl_adaptation_schedules/profile_overlays/developer_drift_gallery_new.yaml",
+      "tasks": [
+        "GalleryCleanupTask",
+        "BatterySaverRoutineTask",
+        "NightEyeCareRoutineTask",
+        "DeepWorkRoutineTask"
+      ]
+    }
+  ]
+}

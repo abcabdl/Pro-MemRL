@@ -1,0 +1,47 @@
+{
+  "name": "same_user_stable_developer_routines",
+  "description": "Same-user online MemRL smoke schedule using only developer routine tasks that scored 1.0 in eval_memrl_knowu_full64_qwen3.5-397b-a17b_v4. Avoids ClockOut, Mattermost, and Bluetooth tasks because they had no-result/channel issues in prior runs.",
+  "profile_id": "developer",
+  "rounds": [
+    {
+      "name": "stable_settings_evidence_1",
+      "phase": "stable_evidence",
+      "profile_overlay": "scripts/memrl_adaptation_schedules/profile_overlays/developer_drift_clockout_old.yaml",
+      "tasks": [
+        "BatterySaverRoutineTask",
+        "NightEyeCareRoutineTask",
+        "DeepWorkRoutineTask"
+      ]
+    },
+    {
+      "name": "stable_productivity_evidence_2",
+      "phase": "stable_evidence",
+      "profile_overlay": "scripts/memrl_adaptation_schedules/profile_overlays/developer_drift_clockout_old.yaml",
+      "tasks": [
+        "PreMeetingPrepTask",
+        "MorningWeatherCheckTask",
+        "WeeklyReportRoutineTask"
+      ]
+    },
+    {
+      "name": "stable_mixed_probe_1",
+      "phase": "retention_probe",
+      "profile_overlay": "scripts/memrl_adaptation_schedules/profile_overlays/developer_drift_clockout_old.yaml",
+      "tasks": [
+        "BatterySaverRoutineTask",
+        "NightEyeCareRoutineTask",
+        "GalleryCleanupTask"
+      ]
+    },
+    {
+      "name": "stable_mixed_probe_2",
+      "phase": "retention_probe",
+      "profile_overlay": "scripts/memrl_adaptation_schedules/profile_overlays/developer_drift_clockout_old.yaml",
+      "tasks": [
+        "DeepWorkRoutineTask",
+        "PreMeetingPrepTask",
+        "MorningPaperReadingTask"
+      ]
+    }
+  ]
+}

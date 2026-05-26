@@ -1,0 +1,111 @@
+{
+  "name": "same_user_multi_habit_drift_stable",
+  "description": "Same-user multi-point profile drift experiment. The developer profile changes several routines at once: old profile has battery_saver and night_eye_care but lacks gallery_cleanup, morning_weather, and pre_meeting_prep; new profile retires battery_saver/night_eye_care and adds gallery_cleanup/morning_weather/pre_meeting_prep. Tasks are selected from eval_memrl_knowu_full64_qwen3.5-397b-a17b_v4 cases that were stable for developer or across profiles.",
+  "profile_id": "developer",
+  "rounds": [
+    {
+      "name": "old_multi_calibration_1",
+      "phase": "old_preference_calibration",
+      "profile_overlay": "scripts/memrl_adaptation_schedules/profile_overlays/developer_drift_multi_old.yaml",
+      "tasks": [
+        "BatterySaverRoutineTask",
+        "NightEyeCareRoutineTask",
+        "GalleryCleanupTask",
+        "MorningWeatherCheckTask"
+      ]
+    },
+    {
+      "name": "old_multi_calibration_2",
+      "phase": "old_preference_calibration",
+      "profile_overlay": "scripts/memrl_adaptation_schedules/profile_overlays/developer_drift_multi_old.yaml",
+      "tasks": [
+        "BatterySaverRoutineTask",
+        "NightEyeCareRoutineTask",
+        "PreMeetingPrepTask",
+        "GalleryCleanupTask"
+      ]
+    },
+    {
+      "name": "old_multi_calibration_3",
+      "phase": "old_preference_calibration",
+      "profile_overlay": "scripts/memrl_adaptation_schedules/profile_overlays/developer_drift_multi_old.yaml",
+      "tasks": [
+        "BatterySaverRoutineTask",
+        "NightEyeCareRoutineTask",
+        "MorningWeatherCheckTask",
+        "PreMeetingPrepTask",
+        "GalleryCleanupTask"
+      ]
+    },
+    {
+      "name": "new_multi_evidence_1",
+      "phase": "new_preference_evidence",
+      "profile_overlay": "scripts/memrl_adaptation_schedules/profile_overlays/developer_drift_multi_new.yaml",
+      "tasks": [
+        "BatterySaverRoutineTask",
+        "NightEyeCareRoutineTask",
+        "GalleryCleanupTask",
+        "MorningWeatherCheckTask"
+      ]
+    },
+    {
+      "name": "new_multi_evidence_2",
+      "phase": "new_preference_evidence",
+      "profile_overlay": "scripts/memrl_adaptation_schedules/profile_overlays/developer_drift_multi_new.yaml",
+      "tasks": [
+        "BatterySaverRoutineTask",
+        "NightEyeCareRoutineTask",
+        "PreMeetingPrepTask",
+        "GalleryCleanupTask"
+      ]
+    },
+    {
+      "name": "new_multi_evidence_3",
+      "phase": "new_preference_evidence",
+      "profile_overlay": "scripts/memrl_adaptation_schedules/profile_overlays/developer_drift_multi_new.yaml",
+      "tasks": [
+        "BatterySaverRoutineTask",
+        "NightEyeCareRoutineTask",
+        "MorningWeatherCheckTask",
+        "PreMeetingPrepTask",
+        "GalleryCleanupTask"
+      ]
+    },
+    {
+      "name": "new_multi_evidence_4",
+      "phase": "new_preference_evidence",
+      "profile_overlay": "scripts/memrl_adaptation_schedules/profile_overlays/developer_drift_multi_new.yaml",
+      "tasks": [
+        "BatterySaverRoutineTask",
+        "NightEyeCareRoutineTask",
+        "GalleryCleanupTask",
+        "MorningWeatherCheckTask",
+        "PreMeetingPrepTask"
+      ]
+    },
+    {
+      "name": "post_switch_multi_probe_1",
+      "phase": "post_switch_probe",
+      "profile_overlay": "scripts/memrl_adaptation_schedules/profile_overlays/developer_drift_multi_new.yaml",
+      "tasks": [
+        "BatterySaverRoutineTask",
+        "NightEyeCareRoutineTask",
+        "GalleryCleanupTask",
+        "MorningWeatherCheckTask",
+        "PreMeetingPrepTask"
+      ]
+    },
+    {
+      "name": "post_switch_multi_probe_2",
+      "phase": "post_switch_probe",
+      "profile_overlay": "scripts/memrl_adaptation_schedules/profile_overlays/developer_drift_multi_new.yaml",
+      "tasks": [
+        "GalleryCleanupTask",
+        "MorningWeatherCheckTask",
+        "PreMeetingPrepTask",
+        "BatterySaverRoutineTask",
+        "NightEyeCareRoutineTask"
+      ]
+    }
+  ]
+}

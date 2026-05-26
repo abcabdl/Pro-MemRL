@@ -1,0 +1,58 @@
+{
+  "name": "same_user_clockout_drift",
+  "description": "Same-user drift experiment. The task profile id stays developer_drift in every round; only the profile snapshot is swapped. The old snapshot keeps the original developer clock-out message. The new snapshot changes only clock_out_routine.content while leaving identity and unrelated habits unchanged.",
+  "profile_id": "developer_drift",
+  "rounds": [
+    {
+      "name": "old_clockout_evidence_1",
+      "phase": "old_preference_evidence",
+      "profile_overlay": "scripts/memrl_adaptation_schedules/profile_overlays/developer_drift_clockout_old.yaml",
+      "tasks": [
+        "ClockOutRoutineTask",
+        "BatterySaverRoutineTask",
+        "MattermostOnCallTask"
+      ]
+    },
+    {
+      "name": "old_clockout_evidence_2",
+      "phase": "old_preference_evidence",
+      "profile_overlay": "scripts/memrl_adaptation_schedules/profile_overlays/developer_drift_clockout_old.yaml",
+      "tasks": [
+        "ClockOutRoutineTask",
+        "BluetoothMediaCleanupTask",
+        "NightEyeCareRoutineTask"
+      ]
+    },
+    {
+      "name": "new_clockout_evidence_1",
+      "phase": "new_preference_evidence",
+      "profile_overlay": "scripts/memrl_adaptation_schedules/profile_overlays/developer_drift_clockout_new.yaml",
+      "tasks": [
+        "ClockOutRoutineTask",
+        "BatterySaverRoutineTask",
+        "MattermostOnCallTask"
+      ]
+    },
+    {
+      "name": "new_clockout_evidence_2",
+      "phase": "new_preference_evidence",
+      "profile_overlay": "scripts/memrl_adaptation_schedules/profile_overlays/developer_drift_clockout_new.yaml",
+      "tasks": [
+        "ClockOutRoutineTask",
+        "BluetoothMediaCleanupTask",
+        "NightEyeCareRoutineTask"
+      ]
+    },
+    {
+      "name": "post_switch_probe",
+      "phase": "post_switch_probe",
+      "profile_overlay": "scripts/memrl_adaptation_schedules/profile_overlays/developer_drift_clockout_new.yaml",
+      "tasks": [
+        "ClockOutRoutineTask",
+        "BatterySaverRoutineTask",
+        "MattermostOnCallTask",
+        "BluetoothMediaCleanupTask"
+      ]
+    }
+  ]
+}

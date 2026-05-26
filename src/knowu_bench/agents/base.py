@@ -60,6 +60,7 @@ class BaseAgent(ABC):
             base_url=base_url,
             api_key=api_key if api_key else "empty",
             timeout=300.0,
+            max_retries=0,
         )
         logger.debug(f"built the OpenAI client with base_url={base_url}")
 

@@ -1,0 +1,101 @@
+{
+  "name": "preference_drift_existing_tasks_multi",
+  "description": "Non-invasive multi-task preference-drift schedule using existing KnowU task classes and existing profile variants only. This is a robustness smoke test: early rounds create old no-routine evidence, later rounds switch to profiles where the same task families are valid routines, then held-out/retention rounds probe whether online MemRL updates recover. It does not modify task logic or original benchmark code.",
+  "rounds": [
+    {
+      "name": "old_absence_grandma_1",
+      "phase": "old_absence_evidence",
+      "user": "grandma",
+      "tasks": [
+        "BirthdayWishTask@grandma",
+        "WeekendSleeperTask@grandma",
+        "NightEyeCareRoutineTask@grandma",
+        "BluetoothMediaCleanupTask@grandma"
+      ]
+    },
+    {
+      "name": "old_absence_grandma_2",
+      "phase": "old_absence_evidence",
+      "user": "grandma",
+      "tasks": [
+        "BirthdayWishTask@grandma",
+        "WeekendSleeperTask@grandma",
+        "NightEyeCareRoutineTask@grandma",
+        "BluetoothMediaCleanupTask@grandma",
+        "GalleryCleanupTask@grandma"
+      ]
+    },
+    {
+      "name": "new_routine_student_evidence",
+      "phase": "new_routine_evidence",
+      "user": "student",
+      "tasks": [
+        "BirthdayWishTask@student",
+        "WeekendSleeperTask@student",
+        "NightEyeCareRoutineTask@student",
+        "BluetoothMediaCleanupTask@student",
+        "GalleryCleanupTask@student"
+      ]
+    },
+    {
+      "name": "student_post_switch_probe",
+      "phase": "post_switch_probe",
+      "user": "student",
+      "tasks": [
+        "BirthdayWishTask@student",
+        "WeekendSleeperTask@student",
+        "NightEyeCareRoutineTask@student",
+        "BluetoothMediaCleanupTask@student",
+        "DeepWorkRoutineTask@student"
+      ]
+    },
+    {
+      "name": "old_absence_developer",
+      "phase": "old_absence_evidence_second_family",
+      "user": "developer",
+      "tasks": [
+        "WeeklyReportRoutineTask@developer",
+        "PreMeetingPrepTask@developer",
+        "ContactSaverTask@developer",
+        "DeepWorkRoutineTask@developer",
+        "DailyFamilyCallTask@developer"
+      ]
+    },
+    {
+      "name": "new_routine_user_evidence",
+      "phase": "new_routine_evidence_second_family",
+      "user": "user",
+      "tasks": [
+        "WeeklyReportRoutineTask@user",
+        "PreMeetingPrepTask@user",
+        "ContactSaverTask@user",
+        "DeepWorkRoutineTask@user",
+        "WeekendSleeperTask@user"
+      ]
+    },
+    {
+      "name": "user_post_switch_probe",
+      "phase": "post_switch_probe_second_family",
+      "user": "user",
+      "tasks": [
+        "WeeklyReportRoutineTask@user",
+        "PreMeetingPrepTask@user",
+        "ContactSaverTask@user",
+        "DeepWorkRoutineTask@user",
+        "BatterySaverRoutineTask@user"
+      ]
+    },
+    {
+      "name": "mixed_retention_probe",
+      "phase": "retention_probe",
+      "tasks": [
+        "BirthdayWishTask@student",
+        "WeekendSleeperTask@student",
+        "NightEyeCareRoutineTask@student",
+        "WeeklyReportRoutineTask@user",
+        "PreMeetingPrepTask@user",
+        "ContactSaverTask@user"
+      ]
+    }
+  ]
+}

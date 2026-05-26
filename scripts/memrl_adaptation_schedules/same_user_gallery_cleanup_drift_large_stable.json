@@ -1,0 +1,121 @@
+{
+  "name": "same_user_gallery_cleanup_drift_large_stable",
+  "description": "Larger same-user profile-drift experiment for testing whether online MemRL updates adapt after the developer profile adds gallery_cleanup. Task pool is restricted to routines that were already stable for developer in eval_memrl_knowu_full64_qwen3.5-397b-a17b_v4. Old rounds use the developer profile without gallery_cleanup; new rounds use the same developer profile with gallery_cleanup. No live-profile routine hint shortcut is required.",
+  "profile_id": "developer",
+  "rounds": [
+    {
+      "name": "old_calibration_stable_1",
+      "phase": "old_preference_calibration",
+      "profile_overlay": "scripts/memrl_adaptation_schedules/profile_overlays/developer_drift_gallery_old.yaml",
+      "tasks": [
+        "GalleryCleanupTask",
+        "BatterySaverRoutineTask",
+        "NightEyeCareRoutineTask",
+        "MorningWeatherCheckTask"
+      ]
+    },
+    {
+      "name": "old_calibration_stable_2",
+      "phase": "old_preference_calibration",
+      "profile_overlay": "scripts/memrl_adaptation_schedules/profile_overlays/developer_drift_gallery_old.yaml",
+      "tasks": [
+        "GalleryCleanupTask",
+        "PreMeetingPrepTask",
+        "WeeklyReportRoutineTask",
+        "MorningPaperReadingTask"
+      ]
+    },
+    {
+      "name": "old_calibration_stable_3",
+      "phase": "old_preference_calibration",
+      "profile_overlay": "scripts/memrl_adaptation_schedules/profile_overlays/developer_drift_gallery_old.yaml",
+      "tasks": [
+        "GalleryCleanupTask",
+        "BatterySaverRoutineTask",
+        "NightEyeCareRoutineTask",
+        "PreMeetingPrepTask",
+        "MorningWeatherCheckTask"
+      ]
+    },
+    {
+      "name": "new_gallery_evidence_1",
+      "phase": "new_preference_evidence",
+      "profile_overlay": "scripts/memrl_adaptation_schedules/profile_overlays/developer_drift_gallery_new.yaml",
+      "tasks": [
+        "GalleryCleanupTask",
+        "BatterySaverRoutineTask",
+        "NightEyeCareRoutineTask",
+        "MorningWeatherCheckTask"
+      ]
+    },
+    {
+      "name": "new_gallery_evidence_2",
+      "phase": "new_preference_evidence",
+      "profile_overlay": "scripts/memrl_adaptation_schedules/profile_overlays/developer_drift_gallery_new.yaml",
+      "tasks": [
+        "GalleryCleanupTask",
+        "PreMeetingPrepTask",
+        "WeeklyReportRoutineTask",
+        "MorningPaperReadingTask"
+      ]
+    },
+    {
+      "name": "new_gallery_evidence_3",
+      "phase": "new_preference_evidence",
+      "profile_overlay": "scripts/memrl_adaptation_schedules/profile_overlays/developer_drift_gallery_new.yaml",
+      "tasks": [
+        "GalleryCleanupTask",
+        "BatterySaverRoutineTask",
+        "NightEyeCareRoutineTask",
+        "PreMeetingPrepTask",
+        "MorningWeatherCheckTask"
+      ]
+    },
+    {
+      "name": "new_gallery_evidence_4",
+      "phase": "new_preference_evidence",
+      "profile_overlay": "scripts/memrl_adaptation_schedules/profile_overlays/developer_drift_gallery_new.yaml",
+      "tasks": [
+        "GalleryCleanupTask",
+        "BatterySaverRoutineTask",
+        "NightEyeCareRoutineTask",
+        "WeeklyReportRoutineTask"
+      ]
+    },
+    {
+      "name": "post_switch_probe_stable_1",
+      "phase": "post_switch_probe",
+      "profile_overlay": "scripts/memrl_adaptation_schedules/profile_overlays/developer_drift_gallery_new.yaml",
+      "tasks": [
+        "GalleryCleanupTask",
+        "PreMeetingPrepTask",
+        "MorningWeatherCheckTask",
+        "MorningPaperReadingTask"
+      ]
+    },
+    {
+      "name": "post_switch_probe_stable_2",
+      "phase": "post_switch_probe",
+      "profile_overlay": "scripts/memrl_adaptation_schedules/profile_overlays/developer_drift_gallery_new.yaml",
+      "tasks": [
+        "GalleryCleanupTask",
+        "BatterySaverRoutineTask",
+        "NightEyeCareRoutineTask",
+        "WeeklyReportRoutineTask",
+        "PreMeetingPrepTask"
+      ]
+    },
+    {
+      "name": "post_switch_probe_stable_3",
+      "phase": "post_switch_probe",
+      "profile_overlay": "scripts/memrl_adaptation_schedules/profile_overlays/developer_drift_gallery_new.yaml",
+      "tasks": [
+        "GalleryCleanupTask",
+        "BatterySaverRoutineTask",
+        "NightEyeCareRoutineTask",
+        "MorningWeatherCheckTask",
+        "MorningPaperReadingTask"
+      ]
+    }
+  ]
+}

@@ -424,7 +424,7 @@ class GeneralE2EAgentMCP(MCPAgent):
         pretty_print_messages(messages, max_messages=6)
         logger.debug("*" * 100)
 
-        try_times = 3
+        try_times = 1
         response = None
         thought = None
         action_str = None
@@ -451,7 +451,7 @@ class GeneralE2EAgentMCP(MCPAgent):
                 error_msg = str(e)
                 try_times -= 1
                 logger.warning(
-                    f"Error fetching response from agent: {error_msg}. Retrying... ({try_times} attempts left)"
+                    f"Error fetching response from agent: {error_msg}. No retries left."
                 )
                 if "timeout" in error_msg.lower() or "connection" in error_msg.lower():
                     time.sleep(2)
