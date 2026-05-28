@@ -30,6 +30,30 @@ def _task_name(base: str, profile_id: str) -> str:
     return base if "@" in base else f"{base}@{profile_id}"
 
 
+ABLATION_CHOICES = (
+    "no_transfer_gate",
+    "similarity_only",
+    "no_q_update",
+    "single_phase",
+)
+
+
+def _normalize_ablations(values: list[str] | None) -> list[str]:
+    ablations: list[str] = []
+    for value in values or []:
+        for item in str(value).split(","):
+            item = item.strip().lower().replace("-", "_")
+            if not item or item == "none":
+                continue
+            if item not in ABLATION_CHOICES:
+                raise ValueError(
+                    f"Unknown ablation {item!r}; expected one of: {', '.join(ABLATION_CHOICES)}"
+                )
+            if item not in ablations:
+                ablations.append(item)
+    return ablations
+
+
 def _run_checked(command: list[str]) -> subprocess.CompletedProcess[str]:
     proc = subprocess.run(command, text=True, capture_output=True, check=False)
     if proc.returncode != 0:
@@ -175,6 +199,7 @@ def _write_summary(output_root: Path, rows: list[dict[str, Any]]) -> None:
         "with_results",
         "memory_count_before",
         "memory_count_after",
+        "ablations",
         "child_output",
     ]
     with (output_root / "same_user_drift_summary.csv").open("w", encoding="utf-8", newline="") as f:
@@ -207,6 +232,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Existing user log profile copied when the drift profile has no explicit log_overlay.",
     )
     parser.add_argument("--condition", choices=["online", "static_memory", "no_memory"], default="online")
+    parser.add_argument(
+        "--ablation",
+        action="append",
+        default=[],
+        help=(
+            "Optional MemRL ablation(s), comma-separated or repeated: "
+            "no_transfer_gate, similarity_only, no_q_update, single_phase."
+        ),
+    )
     parser.add_argument("--reset-memory", action="store_true")
     parser.add_argument("--user-log-mode", choices=["all", "rag", "profile"], default="profile")
     parser.add_argument("--user-log-source", choices=["clean", "noise"], default="clean")
@@ -258,6 +292,7 @@ def main() -> int:
     if not rounds:
         raise ValueError(f"Schedule has no rounds: {schedule_path}")
     profile_id = str(args.profile_id or schedule.get("profile_id") or "developer_drift")
+    ablations = _normalize_ablations(args.ablation)
 
     output_root = _resolve(repo, args.output_root)
     if output_root is None:
@@ -394,6 +429,8 @@ def main() -> int:
                 "--step-wait-time",
                 str(args.step_wait_time),
             ]
+            for ablation in ablations:
+                cmd.extend(["--ablation", ablation])
             if not args.allow_missing_results:
                 cmd.append("--fail-on-missing-results")
             cmd.append("--delegate-unknown-family-abstain")
@@ -423,6 +460,7 @@ def main() -> int:
                 "with_results": child_row.get("with_results", ""),
                 "memory_count_before": child_row.get("memory_count_before", ""),
                 "memory_count_after": child_row.get("memory_count_after", ""),
+                "ablations": ",".join(ablations),
                 "child_output": str(child_output),
             }
             rows.append(row)

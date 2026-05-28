@@ -24,6 +24,42 @@ def _parse_extra_args(values: list[str] | None) -> list[str]:
     return values
 
 
+ABLATION_CHOICES = (
+    "no_transfer_gate",
+    "similarity_only",
+    "no_q_update",
+    "single_phase",
+)
+
+
+def _normalize_ablations(values: list[str] | None) -> list[str]:
+    ablations: list[str] = []
+    for value in values or []:
+        for item in str(value).split(","):
+            item = item.strip().lower().replace("-", "_")
+            if not item or item == "none":
+                continue
+            if item not in ABLATION_CHOICES:
+                raise ValueError(
+                    f"Unknown ablation {item!r}; expected one of: {', '.join(ABLATION_CHOICES)}"
+                )
+            if item not in ablations:
+                ablations.append(item)
+    return ablations
+
+
+def _apply_ablation_env(env: dict[str, str], ablations: list[str]) -> None:
+    if "no_transfer_gate" in ablations:
+        env["KNOWU_MEMRL_TRANSFER_GATE_MODE"] = "no_transfer_gate"
+        env["KNOWU_MEMRL_DISABLE_TRANSFER_GATE"] = "true"
+    if "similarity_only" in ablations:
+        env["KNOWU_MEMRL_RETRIEVAL_SCORING"] = "similarity_only"
+    if "no_q_update" in ablations:
+        env["KNOWU_MEMRL_DISABLE_Q_UPDATES"] = "true"
+    if "single_phase" in ablations:
+        env["KNOWU_MEMRL_PROMPTING_MODE"] = "single_phase"
+
+
 def _latest_report(round_dir: Path) -> Path | None:
     reports = sorted(round_dir.glob("eval_report_*.json"), key=lambda path: path.stat().st_mtime)
     return reports[-1] if reports else None
@@ -115,6 +151,7 @@ def _write_outputs(
         "same_vs_prev",
         "memory_count_before",
         "memory_count_after",
+        "ablations",
         "report_path",
         "run_log",
     ]
@@ -190,6 +227,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Run with memory retrieval enabled but do not write online updates.",
     )
     parser.add_argument(
+        "--ablation",
+        action="append",
+        default=[],
+        help=(
+            "Optional MemRL ablation(s), comma-separated or repeated: "
+            "no_transfer_gate, similarity_only, no_q_update, single_phase."
+        ),
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Print commands and write no eval reports.",
@@ -239,11 +285,13 @@ def main() -> int:
     prev_scores: dict[str, float] | None = None
     prev_successful: int | None = None
     extra_args = _parse_extra_args(args.extra_args)
+    ablations = _normalize_ablations(args.ablation)
 
     print(f"[online-rounds] output_root={output_root}")
     print(f"[online-rounds] memory_state_dir={state_dir}")
     print(f"[online-rounds] bootstrap={bootstrap}")
     print(f"[online-rounds] freeze_updates={args.freeze_updates}")
+    print(f"[online-rounds] ablations={','.join(ablations) if ablations else 'none'}")
 
     for round_idx in range(1, args.rounds + 1):
         round_dir = output_root / f"round_{round_idx:02d}"
@@ -296,6 +344,7 @@ def main() -> int:
         env["KNOWU_MEMRL_STATE_DIR"] = str(state_dir)
         env["KNOWU_MEMRL_BOOTSTRAP"] = str(bootstrap)
         env["KNOWU_MEMRL_FREEZE_UPDATES"] = "true" if args.freeze_updates else "false"
+        _apply_ablation_env(env, ablations)
 
         print(f"[online-rounds] round {round_idx}/{args.rounds}: {' '.join(command)}")
         if args.dry_run:
@@ -337,6 +386,7 @@ def main() -> int:
             "same_vs_prev": same,
             "memory_count_before": memory_before,
             "memory_count_after": memory_after,
+            "ablations": ",".join(ablations),
             "report_path": str(_latest_report(round_dir) or ""),
             "run_log": str(run_log),
         }

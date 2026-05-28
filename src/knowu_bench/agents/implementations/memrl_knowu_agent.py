@@ -112,6 +112,13 @@ class MemRLKnowUAgentMCP(MCPAgent):
         self.last_ask_user_response: Any = None
         self.direct_action_attempted = False
         self.direct_actions_enabled = _env_flag("KNOWU_MEMRL_USE_DIRECT_ACTIONS", True)
+        self.single_phase_prompting = (
+            str(os.getenv("KNOWU_MEMRL_PROMPTING_MODE", "multi_phase") or "multi_phase")
+            .strip()
+            .lower()
+            .replace("-", "_")
+            in {"single_phase", "single_prompt", "one_shot"}
+        )
         self.used_memory_ids: list[str] = []
         self.memrl_use_memory = (
             _env_flag("KNOWU_MEMRL_USE_MEMORY", True)
@@ -173,7 +180,12 @@ class MemRLKnowUAgentMCP(MCPAgent):
         assert self.bridge is not None
         self.plan = self.bridge.plan(instruction=instruction, task_name=self.task_name)
         self.plan["memory_enabled"] = True
+        self.plan["prompting_mode"] = "single_phase" if self.single_phase_prompting else "multi_phase"
         self.used_memory_ids = [str(item) for item in self.plan.get("used_memory_ids", []) if item]
+        if self.single_phase_prompting:
+            self.phase = "delegate"
+            self.executor.initialize(self._single_phase_instruction(instruction))
+            return
         decision = self.plan.get("decision", {}) or {}
         level = int(decision.get("commitment_level", decision.get("level", 0)) or 0)
         should = bool(decision.get("should_intervene", False))
@@ -224,6 +236,30 @@ class MemRLKnowUAgentMCP(MCPAgent):
             f"{instruction}\n\n"
             "### MEMRL KNOWU DECISION CONTEXT\n"
             f"{json.dumps(memrl_context, ensure_ascii=False, indent=2)}"
+        )
+
+    def _single_phase_instruction(self, instruction: str) -> str:
+        decision = self.plan.get("decision", {}) or {}
+        context = {
+            "task_name": self.task_name,
+            "source": self.plan.get("source"),
+            "used_memory_ids": self.used_memory_ids,
+            "memory_decision_prior": decision,
+            "decision_memory_summary": self.bridge._summarize_prior(self.plan.get("decision_prior", {}) or {})
+            if self.bridge
+            else {},
+        }
+        return (
+            f"{instruction}\n\n"
+            "### MEMRL SINGLE-PHASE DECISION CONTEXT\n"
+            f"{json.dumps(context, ensure_ascii=False, indent=2)}\n\n"
+            "Use only the decision memory above as historical guidance. "
+            "Decide in this single response whether to abstain, ask the user, or act for the current task. "
+            "Always return exactly two lines in the executor format: `Thought: ...` and `Action: {json}`. "
+            "If the decision memory says should_intervene=false, use `Action: {\"action_type\":\"finished\", \"text\":\"background_monitoring\"}` without executing. "
+            "If the prior indicates confirmation is needed, use exactly one `ask_user` action. "
+            "If the prior supports autonomous action, infer the concrete action from the current task instruction and execute it with the available GUI actions. "
+            "Do not run a separate MemRL abstain/ask/delegate phase outside this prompt."
         )
 
     def predict(self, observation: dict[str, Any]) -> tuple[str, JSONAction]:
@@ -318,6 +354,7 @@ class MemRLKnowUAgentMCP(MCPAgent):
         if (
             self.phase == "delegate"
             and self.direct_actions_enabled
+            and not self.single_phase_prompting
             and not self.direct_action_attempted
         ):
             self.direct_action_attempted = True
@@ -985,6 +1022,7 @@ class MemRLKnowUAgentMCP(MCPAgent):
             ),
             "reason": decision.get("reason", ""),
             "candidate_task": candidate.get("proactive_task"),
+            "prompting_mode": "single_phase" if self.single_phase_prompting else "multi_phase",
             "direct_actions_enabled": self.direct_actions_enabled,
             "unknown_family_abstain_delegate": bool(
                 self.plan.get("unknown_family_abstain_delegate", False)

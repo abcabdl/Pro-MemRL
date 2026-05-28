@@ -40,6 +40,40 @@ Use the same schedule with different conditions:
 The main evidence is the gap between `online` and the two baselines over later
 probe rounds.
 
+## Ablations
+
+The experiment runners expose four non-default ablation switches. They are
+implemented through environment variables at runtime, so the default agent and
+memory logic stay unchanged.
+
+```bash
+# 1. No profile-task transfer gate: keep same-task or unscoped memories only.
+--ablation no_transfer_gate
+
+# 2. Similarity-only retrieval: rank memories by semantic similarity only.
+--ablation similarity_only
+
+# 3. No Q-value / online utility update: retrieve from fixed memory.
+--ablation no_q_update
+
+# 4. Single-phase prompting: one prompt decides abstain / ask / act.
+--ablation single_phase
+```
+
+You can repeat or comma-separate ablations:
+
+```bash
+python scripts/run_memrl_adaptation_experiment.py \
+  --schedule scripts/memrl_adaptation_schedules/online_adaptation_developer.json \
+  --output-root artifacts/memrl_adapt_similarity_only \
+  --condition online \
+  --ablation similarity_only
+```
+
+The same `--ablation` flag is available in
+`scripts/run_memrl_online_rounds.py` and
+`scripts/run_memrl_same_user_drift_experiment.py`.
+
 ## Schedules
 
 `online_adaptation_developer.json`

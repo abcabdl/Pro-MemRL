@@ -95,6 +95,8 @@ def parse_action(plan_output: str) -> tuple[str, str]:
         Tuple of (thought, action)
     """
     try:
+        if plan_output is None:
+            raise ValueError("LLM response is None")
         parts = plan_output.split("Action:")
 
         if len(parts) != 2:
@@ -457,7 +459,10 @@ class GeneralE2EAgentMCP(MCPAgent):
                     time.sleep(2)
 
         if response is None:
-            raise ValueError("Agent LLM failed")
+            logger.error("Agent LLM returned no response.")
+            return "Agent LLM failed: empty response", JSONAction(
+                action_type="unknown", text="Agent LLM failed: empty response"
+            )
         if action_str is None:
             return "Agent LLM failed", JSONAction(action_type="unknown", text="Agent LLM failed")
 

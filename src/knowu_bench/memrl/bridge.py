@@ -220,6 +220,7 @@ class KnowUMemRLBridge:
         self.memories_by_sample: dict[str, dict[str, Any]] = {}
         self.last_plan: dict[str, Any] | None = None
         self.freeze_updates = _env_flag("KNOWU_MEMRL_FREEZE_UPDATES", True)
+        self.disable_q_updates = _env_flag("KNOWU_MEMRL_DISABLE_Q_UPDATES")
         self._load_runtime()
 
     def _load_runtime(self) -> None:
@@ -380,6 +381,11 @@ class KnowUMemRLBridge:
         if self.freeze_updates:
             logger.info(
                 "KnowU MemRL memory update skipped because KNOWU_MEMRL_FREEZE_UPDATES is enabled."
+            )
+            return
+        if self.disable_q_updates:
+            logger.info(
+                "KnowU MemRL memory update skipped because KNOWU_MEMRL_DISABLE_Q_UPDATES is enabled."
             )
             return
         if str(interaction_status or "") == "transport_error" or _ask_user_transport_error(

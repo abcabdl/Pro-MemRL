@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -68,6 +69,13 @@ def _target_key(profile_id: str | None, task_family: str | None) -> str | None:
     if not profile_id or not task_family:
         return None
     return f"{profile_id}::{task_family}"
+
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
 class ProactiveMemRLRuntime:
@@ -187,6 +195,8 @@ class ProactiveMemRLRuntime:
         return self.retriever.retrieve_for_decision(observations, candidate, simulation, signals)
 
     def record_outcome(self, used_memory_ids: list[str], reward: float, episode: dict) -> None:
+        if _env_flag("KNOWU_MEMRL_DISABLE_Q_UPDATES"):
+            return
         appended = False
         episode_labels = episode.get("labels", {}) if isinstance(episode.get("labels"), dict) else {}
         target_profile = episode_labels.get("profile_id")

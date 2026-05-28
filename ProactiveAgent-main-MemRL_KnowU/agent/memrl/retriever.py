@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from collections import Counter
 from typing import Any
@@ -29,6 +30,17 @@ def _candidate_level(memory: dict[str, Any]) -> int:
 
 def _clamp(value: float, low: float, high: float) -> float:
     return max(low, min(high, value))
+
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _env_choice(name: str, default: str) -> str:
+    return str(os.getenv(name, default) or default).strip().lower().replace("-", "_")
 
 
 def _gate_trust_multiplier(memory: dict[str, Any]) -> float:
@@ -151,6 +163,19 @@ def _transfer_gate(
     return _clamp(base_gate, 0.0, 1.0)
 
 
+def _same_task_or_unscoped_memory(
+    memory: dict[str, Any],
+    *,
+    target_task_family: str | None,
+) -> bool:
+    if not target_task_family:
+        return True
+    source_task = _memory_task_family(memory)
+    if not source_task:
+        return True
+    return source_task == target_task_family
+
+
 class MemRLRetriever:
     def __init__(self, *, topk: int = 8, sim_threshold: float = 0.18) -> None:
         self.topk = topk
@@ -184,17 +209,33 @@ class MemRLRetriever:
         ranked: list[dict[str, Any]] = []
         target_profile = _target_profile(query)
         target_task_family = _target_task_family(query)
+        scoring_mode = _env_choice("KNOWU_MEMRL_RETRIEVAL_SCORING", "value_aware")
+        transfer_gate_disabled = _env_flag("KNOWU_MEMRL_DISABLE_TRANSFER_GATE") or _env_choice(
+            "KNOWU_MEMRL_TRANSFER_GATE_MODE",
+            "default",
+        ) in {"off", "disabled", "no_transfer_gate", "same_task_only"}
         for memory_id, sim in self.index.search(query, topk=len(self.memories)):
             if sim < self.sim_threshold:
                 continue
             memory = self.memories[memory_id]
             q_value = _clamp(_safe_float(memory.get("q_value", 0.0)), -1.0, 1.0)
-            base_score = 0.7 * sim + 0.3 * abs(q_value)
-            transfer_gate = _transfer_gate(
-                memory,
-                target_profile=target_profile,
-                target_task_family=target_task_family,
-            )
+            if scoring_mode in {"similarity_only", "semantic_only"}:
+                base_score = sim
+            else:
+                base_score = 0.7 * sim + 0.3 * abs(q_value)
+            if transfer_gate_disabled:
+                if not _same_task_or_unscoped_memory(
+                    memory,
+                    target_task_family=target_task_family,
+                ):
+                    continue
+                transfer_gate = 1.0
+            else:
+                transfer_gate = _transfer_gate(
+                    memory,
+                    target_profile=target_profile,
+                    target_task_family=target_task_family,
+                )
             score = transfer_gate * base_score
             ranked.append(
                 {
@@ -205,6 +246,8 @@ class MemRLRetriever:
                     "transfer_gate": transfer_gate,
                     "target_profile": target_profile,
                     "target_task_family": target_task_family,
+                    "retrieval_scoring": scoring_mode,
+                    "transfer_gate_disabled": transfer_gate_disabled,
                 }
             )
         ranked.sort(key=lambda item: item["score"], reverse=True)
@@ -227,12 +270,16 @@ class MemRLRetriever:
                 * _safe_float(item.get("transfer_gate", 1.0), 1.0),
                 1e-6,
             )
+            if item.get("retrieval_scoring") in {"similarity_only", "semantic_only"}:
+                evidence_score = match_weight
+            else:
+                evidence_score = _safe_float(item.get("transfer_gate", 1.0), 1.0) * abs(q_value)
             rescored.append(
                 {
                     **item,
                     "adjusted_score": adjusted_score,
                     "match_weight": match_weight,
-                    "evidence_score": _safe_float(item.get("transfer_gate", 1.0), 1.0) * abs(q_value),
+                    "evidence_score": evidence_score,
                     "evidence_side": _evidence_side(memory),
                 }
             )

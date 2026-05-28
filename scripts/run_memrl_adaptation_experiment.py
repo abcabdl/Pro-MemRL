@@ -25,6 +25,42 @@ def _parse_extra_args(values: list[str] | None) -> list[str]:
     return values
 
 
+ABLATION_CHOICES = (
+    "no_transfer_gate",
+    "similarity_only",
+    "no_q_update",
+    "single_phase",
+)
+
+
+def _normalize_ablations(values: list[str] | None) -> list[str]:
+    ablations: list[str] = []
+    for value in values or []:
+        for item in str(value).split(","):
+            item = item.strip().lower().replace("-", "_")
+            if not item or item == "none":
+                continue
+            if item not in ABLATION_CHOICES:
+                raise ValueError(
+                    f"Unknown ablation {item!r}; expected one of: {', '.join(ABLATION_CHOICES)}"
+                )
+            if item not in ablations:
+                ablations.append(item)
+    return ablations
+
+
+def _apply_ablation_env(env: dict[str, str], ablations: list[str]) -> None:
+    if "no_transfer_gate" in ablations:
+        env["KNOWU_MEMRL_TRANSFER_GATE_MODE"] = "no_transfer_gate"
+        env["KNOWU_MEMRL_DISABLE_TRANSFER_GATE"] = "true"
+    if "similarity_only" in ablations:
+        env["KNOWU_MEMRL_RETRIEVAL_SCORING"] = "similarity_only"
+    if "no_q_update" in ablations:
+        env["KNOWU_MEMRL_DISABLE_Q_UPDATES"] = "true"
+    if "single_phase" in ablations:
+        env["KNOWU_MEMRL_PROMPTING_MODE"] = "single_phase"
+
+
 def _copy_seed_memory(seed: Path, state_dir: Path) -> None:
     state_dir.mkdir(parents=True, exist_ok=True)
     if seed.is_dir():
@@ -89,6 +125,7 @@ def _write_outputs(output_root: Path, rows: list[dict[str, Any]], reports: list[
         "condition",
         "memrl_use_memory",
         "freeze_updates",
+        "ablations",
         "run_log",
     ]
     with (output_root / "adaptation_rounds_summary.csv").open("w", encoding="utf-8", newline="") as f:
@@ -125,6 +162,15 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["online", "static_memory", "no_memory"],
         default="online",
         help="Baseline condition: online updates, frozen memory, or no memory retrieval.",
+    )
+    parser.add_argument(
+        "--ablation",
+        action="append",
+        default=[],
+        help=(
+            "Optional MemRL ablation(s), comma-separated or repeated: "
+            "no_transfer_gate, similarity_only, no_q_update, single_phase."
+        ),
     )
     parser.add_argument(
         "--bootstrap",
@@ -215,11 +261,13 @@ def main() -> int:
     prev_scores: dict[str, float] | None = None
     prev_successful: int | None = None
     extra_args = _parse_extra_args(args.extra_args)
+    ablations = _normalize_ablations(args.ablation)
 
     print(f"[adaptation] schedule={schedule_path}")
     print(f"[adaptation] output_root={output_root}")
     print(f"[adaptation] memory_state_dir={state_dir}")
     print(f"[adaptation] condition={args.condition}")
+    print(f"[adaptation] ablations={','.join(ablations) if ablations else 'none'}")
 
     for idx, round_cfg in enumerate(rounds, start=1):
         round_name = str(round_cfg.get("name") or f"round_{idx:02d}")
@@ -288,6 +336,7 @@ def main() -> int:
         env["KNOWU_MEMRL_STATE_DIR"] = str(state_dir)
         env["KNOWU_MEMRL_BOOTSTRAP"] = str(bootstrap)
         env["KNOWU_MEMRL_FREEZE_UPDATES"] = "true" if freeze_updates else "false"
+        _apply_ablation_env(env, ablations)
         if args.delegate_unknown_family_abstain:
             env["KNOWU_MEMRL_DELEGATE_UNKNOWN_FAMILY_ABSTAIN"] = "true"
         if args.live_profile_routine_hints:
@@ -343,6 +392,7 @@ def main() -> int:
             "condition": args.condition,
             "memrl_use_memory": memrl_use_memory,
             "freeze_updates": freeze_updates,
+            "ablations": ",".join(ablations),
             "run_log": str(run_log),
         }
         rows.append(row)
