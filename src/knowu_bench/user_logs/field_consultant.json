@@ -1,0 +1,26 @@
+[
+  {
+    "time": "2026-01-12T09:20:00",
+    "location": "Client Site",
+    "category": "routine",
+    "action": "Her Bluetooth earbuds disconnected before a client workshop. She muted media volume immediately to prevent audio leaking in the meeting room."
+  },
+  {
+    "time": "2026-01-12T17:55:00",
+    "location": "Client Site",
+    "category": "routine",
+    "action": "At the end of the client visit, she posted 'Field visit complete, notes uploaded' to the field-ops Mattermost channel."
+  },
+  {
+    "time": "2026-01-13T16:10:00",
+    "location": "High-speed train",
+    "category": "routine",
+    "action": "Battery reached 15% during travel. She enabled Battery Saver before checking client messages."
+  },
+  {
+    "time": "2026-01-14T18:05:00",
+    "location": "Client Site",
+    "category": "routine",
+    "action": "She sent an end-of-day handover update after uploading meeting notes."
+  }
+]

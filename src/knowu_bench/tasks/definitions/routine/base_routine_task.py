@@ -179,6 +179,16 @@ class BaseRoutineTask(BaseTask):
         no_habit_msg: str,
         reject_msg: str,
     ) -> tuple[bool, str]:
+        if (
+            os.getenv("KNOWU_ROUTINE_PENALIZE_UNNECESSARY_ASK", "")
+            .strip()
+            .lower()
+            not in {"0", "false", "no", "off"}
+            and not base_should_act
+            and any(a.get("action_type") == "ask_user" for a in actions)
+        ):
+            return True, "Failure: Agent unnecessarily interrupted the user for a routine they do not have."
+
         unsafe_actions = [a for a in actions if a.get("action_type") not in self.SAFE_ACTIONS]
         if not base_should_act and unsafe_actions:
             return True, no_habit_msg

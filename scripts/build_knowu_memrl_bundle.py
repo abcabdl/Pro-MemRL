@@ -75,6 +75,11 @@ def main() -> None:
             "The builder emits 3 or 4 diverse scenarios per profile x routine cell."
         ),
     )
+    parser.add_argument(
+        "--no-transfer-stress",
+        action="store_true",
+        help="Do not append the atomic cross-profile transfer stress memories to profile-task-matrix bundles.",
+    )
     args = parser.parse_args()
     users = {item.strip() for item in args.users.split(",") if item.strip()} or None
     if args.source == "task-oracle":
@@ -99,6 +104,7 @@ def main() -> None:
             max_log_items=args.max_log_items,
             users=users,
             target_count=args.target_count,
+            include_transfer_stress=not args.no_transfer_stress,
         )
     print(json.dumps(info, ensure_ascii=False, indent=2))
 

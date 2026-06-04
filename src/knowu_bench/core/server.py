@@ -103,11 +103,7 @@ task_registry = None
 
 @app.get("/health")
 def health():
-    """Check health of all registered devices.
-
-    If any device is unhealthy, automatically restarts the emulator for the current
-    suite family. Implements locking to prevent concurrent restart attempts.
-    """
+    """Check health of all registered devices."""
     device_status = {}
     all_healthy = True
     unhealthy_devices = []
@@ -119,44 +115,11 @@ def health():
             all_healthy = False
             unhealthy_devices.append(device_id)
 
-    # If unhealthy, attempt to restart emulator (with concurrency protection)
+    # Health checks may run while a task is loading an emulator snapshot. During
+    # that window ADB can briefly report the device as offline; restarting here
+    # races with task initialization and leaves the task half-configured.
     if not all_healthy:
-        current_time = time.time()
-
-        # Check if we should attempt restart (cooldown check)
-        should_restart = False
-        global _last_restart_attempt
-        with _restart_lock:
-            if current_time - _last_restart_attempt >= RESTART_COOLDOWN_SECONDS:
-                _last_restart_attempt = current_time
-                should_restart = True
-
-        if should_restart:
-            try:
-                logger.warning(
-                    f"[HEALTH] Unhealthy devices detected: {unhealthy_devices}. "
-                    f"Restarting emulator for suite family: {SUITE_FAMILY}"
-                )
-                avd_name = AVD_MAPPING[SUITE_FAMILY]
-
-                device_id = restart_emulator_with_avd(avd_name)
-                logger.info(
-                    f"[HEALTH] Successfully restarted emulator with AVD {avd_name}, "
-                    f"new device_id: {device_id}"
-                )
-
-            except Exception as e:
-                logger.error(
-                    f"[HEALTH] Failed to restart emulator for suite family {SUITE_FAMILY}: {e}",
-                    exc_info=True,
-                )
-        else:
-            time_since_last = current_time - _last_restart_attempt
-            logger.debug(
-                f"[HEALTH] Restart skipped - cooldown period active "
-                f"(last attempt: {time_since_last:.1f}s ago, "
-                f"cooldown: {RESTART_COOLDOWN_SECONDS}s)"
-            )
+        logger.warning(f"[HEALTH] Unhealthy devices detected: {unhealthy_devices}")
 
     return {
         "ok": all_healthy,

@@ -206,6 +206,21 @@ uv run mw eval \
 
 For sanity checks only, `--source task-oracle` can build a full-data bundle directly from routine task expectations; do not use that setting for held-out evaluation. The profile-habit source treats structured profiles as long-term memory, exposes user logs as memory evidence, and lets KnowU's existing Android task initialization and `is_successful()` checks remain the source of execution reward.
 
+To isolate whether other users' memories help a cold-start or sparse-memory target user, run the cross-user transfer interface. It builds temporary bootstraps and leaves the existing evaluation and adaptation runners unchanged:
+
+```bash
+uv run python scripts/run_memrl_cross_user_transfer_experiment.py \
+  --target-user developer \
+  --target-memories-per-family 1 \
+  --source-users student,grandma,user \
+  --rounds 1 \
+  --model-name your-model-name \
+  --llm-base-url https://your-openai-compatible-endpoint/v1 \
+  --api-key "$API_KEY"
+```
+
+The three default conditions are `same_user_only`, `cross_user_no_gate`, and `transfer_gate_online`. Use `--target-memories-per-family 0` for a pure cross-user cold start, or `-1` to keep all target-user memories.
+
 ## 📁 Repository Layout
 
 Below, replace `src/<your_bench_package>/` with the package directory for your own benchmark.

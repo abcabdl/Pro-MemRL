@@ -145,6 +145,90 @@ ROUTINE_TASK_SPECS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
+        "task_family": "low_battery_meeting_prep",
+        "display": "low-battery meeting prep",
+        "habit_keys": ("low_battery_saver", "pre_meeting_prep"),
+        "trigger_variants": (
+            "Battery is critically low while an imminent meeting requires opening the preparation document.",
+            "The phone is unplugged, a meeting starts soon, and the user's prep file should be ready.",
+            "Low-power mitigation and pre-meeting document preparation are both due at the same time.",
+        ),
+        "negative_variants": (
+            "Only one of low battery or meeting prep is active; a combined intervention is not warranted.",
+            "The meeting is not imminent or the battery is not low enough for the combined routine.",
+        ),
+    },
+    {
+        "task_family": "friday_report_weekend_alarm",
+        "display": "Friday report plus weekend alarm",
+        "habit_keys": ("weekly_report", "weekend_sleeper"),
+        "trigger_variants": (
+            "It is Friday report time and the next morning is a weekend with an enabled early alarm.",
+            "The weekly report file is ready while the user's weekend sleep-in alarm adjustment is also due.",
+            "Both the Friday report sending routine and weekend alarm-disabling routine are active.",
+        ),
+        "negative_variants": (
+            "Only the report deadline or only the weekend alarm cue is active, not both.",
+            "It is not Friday report time or tomorrow is not a weekend sleep-in day.",
+        ),
+    },
+    {
+        "task_family": "developer_battery_dark_mode",
+        "display": "developer battery plus dark mode",
+        "habit_keys": ("low_battery_saver", "night_eye_care"),
+        "trigger_variants": (
+            "Battery is critically low during late-night phone use in a dark room.",
+            "Low-power mitigation and night eye-care are both due at the same time.",
+            "The phone is unplugged below the low-battery threshold while the user is working at night.",
+        ),
+        "negative_variants": (
+            "Only low battery or only late-night display context is active, not both.",
+            "Battery is normal or it is daytime, so the combined battery/display routine is not due.",
+        ),
+    },
+    {
+        "task_family": "developer_bluetooth_battery",
+        "display": "developer Bluetooth plus battery",
+        "habit_keys": ("bluetooth_cleanup", "low_battery_saver"),
+        "trigger_variants": (
+            "Bluetooth headphones disconnected during media playback while battery is low.",
+            "A media leak risk and a low-battery warning are both active.",
+            "The user is in an office context with Bluetooth disconnected and the phone below the battery threshold.",
+        ),
+        "negative_variants": (
+            "Only Bluetooth disconnect or only low battery is active, not both.",
+            "There is no simultaneous audio leak risk and low-battery condition.",
+        ),
+    },
+    {
+        "task_family": "developer_bluetooth_dark_mode",
+        "display": "developer Bluetooth plus dark mode",
+        "habit_keys": ("bluetooth_cleanup", "night_eye_care"),
+        "trigger_variants": (
+            "Bluetooth headphones disconnected during active media playback in a dark late-night room.",
+            "A media leak risk and night eye-care context are both active.",
+            "The user is using the phone at night when Bluetooth audio disconnects.",
+        ),
+        "negative_variants": (
+            "Only Bluetooth disconnect or only night usage is active, not both.",
+            "There is no simultaneous media leak risk and night eye-care condition.",
+        ),
+    },
+    {
+        "task_family": "developer_quiet_system_triple",
+        "display": "developer quiet system triple",
+        "habit_keys": ("bluetooth_cleanup", "low_battery_saver", "night_eye_care"),
+        "trigger_variants": (
+            "Bluetooth disconnected during playback while battery is low and the user is in a dark quiet room.",
+            "Audio safety, Battery Saver, and Dark Mode routines are all active together.",
+            "The phone has a media leak risk, low battery, and late-night eye-care context at once.",
+        ),
+        "negative_variants": (
+            "Only one or two quiet system cues are active, so the full triple intervention is too aggressive.",
+            "There is no simultaneous Bluetooth leak risk, low battery, and night eye-care context.",
+        ),
+    },
+    {
         "task_family": "mattermost_response",
         "display": "Mattermost alert response",
         "habit_keys": ("on_call_response",),
@@ -215,6 +299,20 @@ ROUTINE_TASK_SPECS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
+        "task_family": "quiet_hours_bluetooth_battery",
+        "display": "quiet-hours Bluetooth and battery protection",
+        "habit_keys": ("bluetooth_cleanup", "low_battery_saver", "night_eye_care"),
+        "trigger_variants": (
+            "At late-night quiet hours, Bluetooth disconnected during playback while battery is low.",
+            "A shared quiet workspace, active media leak risk, low battery, and night eye-care window coincide.",
+            "The user needs media muted, Battery Saver enabled, and Dark Mode enabled together.",
+        ),
+        "negative_variants": (
+            "Only one quiet-hours system cue is active, so the full triple intervention is too aggressive.",
+            "There is no simultaneous Bluetooth leak risk, low battery, and night eye-care context.",
+        ),
+    },
+    {
         "task_family": "scam_sms_intercept",
         "display": "scam SMS intercept",
         "habit_keys": ("scam_sms_intercept", "scam_sms_block"),
@@ -257,6 +355,459 @@ ROUTINE_TASK_SPECS: tuple[dict[str, Any], ...] = (
         ),
     },
 )
+
+
+STRESS_TRANSFER_TASK_SPECS: tuple[dict[str, Any], ...] = (
+    {
+        "task_family": "stress_critical_reachability_battery_saver",
+        "task_name": "StressCriticalReachabilityBatterySaverTask",
+        "display": "critical reachability battery saver",
+        "action": "Enable Battery Saver.",
+        "context": (
+            "Battery is 12%, unplugged. The user is away from a charger, must remain reachable "
+            "for deployment messages, and no navigation task is active."
+        ),
+        "target_should_act": True,
+        "aligned_profiles": ("emergency_doctor", "field_consultant", "night_creator"),
+        "conflict_profiles": ("student", "grandma", "user"),
+        "aligned_reason": "Reachability-critical low battery was helped by Battery Saver without blocking the active task.",
+        "conflict_reason": "This source profile tends to ignore low-power automation or prefers manual control in similar moments.",
+    },
+    {
+        "task_family": "stress_navigation_battery_saver_boundary",
+        "task_name": "StressNavigationBatterySaverBoundaryTask",
+        "display": "navigation battery-saver boundary",
+        "action": "Enable Battery Saver.",
+        "context": (
+            "Battery is 16%, unplugged, but turn-by-turn navigation is active for a time-sensitive route "
+            "and the user expects to reach a charger soon."
+        ),
+        "target_should_act": False,
+        "aligned_profiles": ("field_consultant", "emergency_doctor"),
+        "conflict_profiles": ("student", "grandma", "night_creator", "user"),
+        "aligned_reason": "Navigation/location reliability mattered more than saving a small amount of battery.",
+        "conflict_reason": "This source profile often enables Battery Saver whenever low battery appears, ignoring navigation boundaries.",
+    },
+    {
+        "task_family": "stress_public_bluetooth_leak_mute",
+        "task_name": "StressPublicBluetoothLeakMuteTask",
+        "display": "public Bluetooth leak mute",
+        "action": "Mute media volume.",
+        "context": (
+            "Bluetooth earbuds disconnected while media playback is active at high volume in a shared meeting room "
+            "right before a demo."
+        ),
+        "target_should_act": True,
+        "aligned_profiles": ("field_consultant", "night_creator", "student"),
+        "conflict_profiles": ("grandma", "user", "emergency_doctor"),
+        "aligned_reason": "Public audio leakage was disruptive, so muting media was helpful.",
+        "conflict_reason": "This source profile treats Bluetooth disconnects as harmless unless the user explicitly complains.",
+    },
+    {
+        "task_family": "stress_private_bluetooth_boundary",
+        "task_name": "StressPrivateBluetoothBoundaryTask",
+        "display": "private Bluetooth boundary",
+        "action": "Mute media volume.",
+        "context": (
+            "Bluetooth disconnected at the user's private home desk. Media is not leaking into a shared space "
+            "and there is no meeting-room risk."
+        ),
+        "target_should_act": False,
+        "aligned_profiles": ("night_creator", "field_consultant"),
+        "conflict_profiles": ("student", "grandma", "user", "emergency_doctor"),
+        "aligned_reason": "Private context made volume changes unnecessary and potentially annoying.",
+        "conflict_reason": "This source profile mutes on every Bluetooth disconnect, even in private contexts.",
+    },
+    {
+        "task_family": "stress_late_reading_dark_mode",
+        "task_name": "StressLateReadingDarkModeTask",
+        "display": "late reading dark mode",
+        "action": "Enable Dark Mode.",
+        "context": "It is 23:42. The user is reading a long technical document in a dim room on a bright screen.",
+        "target_should_act": True,
+        "aligned_profiles": ("night_creator", "student", "emergency_doctor"),
+        "conflict_profiles": ("field_consultant", "grandma", "user"),
+        "aligned_reason": "Late reading in a dim room made Dark Mode helpful and low risk.",
+        "conflict_reason": "This source profile prefers display stability and avoids automatic theme changes.",
+    },
+    {
+        "task_family": "stress_color_review_dark_mode_boundary",
+        "task_name": "StressColorReviewDarkModeBoundaryTask",
+        "display": "color review dark-mode boundary",
+        "action": "Enable Dark Mode.",
+        "context": (
+            "It is late at night, but the user is reviewing color-sensitive UI screenshots and charts where "
+            "display color changes can distort the work."
+        ),
+        "target_should_act": False,
+        "aligned_profiles": ("night_creator", "field_consultant"),
+        "conflict_profiles": ("student", "grandma", "emergency_doctor", "user"),
+        "aligned_reason": "Color-critical review should preserve display appearance, so Dark Mode was correctly avoided.",
+        "conflict_reason": "This source profile enables Dark Mode whenever it is late, even during color-sensitive work.",
+    },
+    {
+        "task_family": "stress_focus_block_dnd",
+        "task_name": "StressFocusBlockDndTask",
+        "display": "focus block DND",
+        "action": "Enable DND/Silent mode.",
+        "context": (
+            "A protected 90-minute implementation block has started. Calendar shows no on-call duty or urgent meeting, "
+            "and notifications are normal."
+        ),
+        "target_should_act": True,
+        "aligned_profiles": ("student", "night_creator", "field_consultant"),
+        "conflict_profiles": ("emergency_doctor", "grandma", "user"),
+        "aligned_reason": "No reachability constraint was active, so DND protected the focused work block.",
+        "conflict_reason": "This source profile avoids DND because they expect important interruptions.",
+    },
+    {
+        "task_family": "stress_on_call_dnd_boundary",
+        "task_name": "StressOnCallDndBoundaryTask",
+        "display": "on-call DND boundary",
+        "action": "Enable DND/Silent mode.",
+        "context": (
+            "The user is coding, but the on-call rotation is active and a critical incident channel may page them. "
+            "Notifications are normal."
+        ),
+        "target_should_act": False,
+        "aligned_profiles": ("emergency_doctor", "field_consultant"),
+        "conflict_profiles": ("student", "night_creator", "grandma", "user"),
+        "aligned_reason": "On-call reachability outweighed focus protection, so DND was correctly avoided.",
+        "conflict_reason": "This source profile protects focus by enabling DND even when reachability signals are present.",
+    },
+    {
+        "task_family": "stress_imminent_meeting_open_doc",
+        "task_name": "StressImminentMeetingOpenDocTask",
+        "display": "imminent meeting open document",
+        "action": "Open the meeting PDF.",
+        "context": (
+            "A design review starts in 3 minutes. The relevant PDF is on the phone, not open, and the user is at home screen."
+        ),
+        "target_should_act": True,
+        "aligned_profiles": ("field_consultant", "student", "emergency_doctor"),
+        "conflict_profiles": ("grandma", "night_creator", "user"),
+        "aligned_reason": "The meeting was imminent and the specific document was needed, so opening it saved time.",
+        "conflict_reason": "This source profile waits for explicit user instruction before opening documents.",
+    },
+    {
+        "task_family": "stress_meeting_not_imminent_boundary",
+        "task_name": "StressMeetingNotImminentBoundaryTask",
+        "display": "non-imminent meeting document boundary",
+        "action": "Open the meeting PDF.",
+        "context": (
+            "A design review exists later today but starts in about 35 minutes. The user is still finishing another task."
+        ),
+        "target_should_act": False,
+        "aligned_profiles": ("field_consultant", "night_creator"),
+        "conflict_profiles": ("student", "grandma", "emergency_doctor", "user"),
+        "aligned_reason": "The meeting was not imminent, so opening the document would interrupt current work.",
+        "conflict_reason": "This source profile opens meeting material whenever a meeting exists, even too early.",
+    },
+    {
+        "task_family": "execution_battery_dark_late_doc",
+        "task_name": "ExecutionBatteryDarkLateDocTask",
+        "display": "execution detail: battery plus dark mode",
+        "action": "Enable Battery Saver and enable Dark Mode only.",
+        "conflict_action": "Enable Battery Saver only.",
+        "context": "Battery is 11%, unplugged, and the user is reading API docs in a dim room.",
+        "conflict_context": "Battery was critically low, but the room was well lit and no display adjustment was needed.",
+        "target_should_act": True,
+        "aligned_profiles": ("night_creator", "student", "emergency_doctor"),
+        "conflict_profiles": ("field_consultant", "grandma", "user"),
+        "aligned_reason": "The analogous source case required both power preservation and night display comfort.",
+        "conflict_reason": "This source case transferred the intervene decision but missed the Dark Mode execution detail.",
+    },
+    {
+        "task_family": "execution_battery_only_reachable_night",
+        "task_name": "ExecutionBatteryOnlyReachableNightTask",
+        "display": "execution detail: battery only during reachability",
+        "action": "Enable Battery Saver only.",
+        "conflict_action": "Enable Battery Saver and enable DND/Silent mode.",
+        "context": "Battery is 9%, unplugged during on-call watch; notifications must remain audible.",
+        "conflict_context": "Low battery coincided with private focus time where DND was acceptable.",
+        "target_should_act": True,
+        "aligned_profiles": ("emergency_doctor", "field_consultant", "user"),
+        "conflict_profiles": ("student", "night_creator", "grandma"),
+        "aligned_reason": "The analogous source case preserved battery while keeping the user reachable.",
+        "conflict_reason": "This source case copied a focus-protection detail that violates developer reachability.",
+    },
+    {
+        "task_family": "execution_mute_only_public_demo",
+        "task_name": "ExecutionMuteOnlyPublicDemoTask",
+        "display": "execution detail: media mute only",
+        "action": "Mute media volume only.",
+        "conflict_action": "Mute media volume and enable Battery Saver.",
+        "context": "Earbuds disconnected during playback in a shared demo room while battery is healthy.",
+        "conflict_context": "Audio leaked in public while the source user's battery was also low.",
+        "target_should_act": True,
+        "aligned_profiles": ("field_consultant", "night_creator", "student"),
+        "conflict_profiles": ("emergency_doctor", "grandma", "user"),
+        "aligned_reason": "The analogous source case fixed public audio leakage without unrelated settings changes.",
+        "conflict_reason": "This source case transfers an extra low-battery action that the developer context does not need.",
+    },
+    {
+        "task_family": "execution_mute_battery_commute",
+        "task_name": "ExecutionMuteBatteryCommuteTask",
+        "display": "execution detail: mute plus battery",
+        "action": "Mute media volume and enable Battery Saver only.",
+        "conflict_action": "Mute media volume only.",
+        "context": "Earbuds disconnected on a crowded train while media plays and battery is 13%.",
+        "conflict_context": "Audio leaked in public with healthy battery.",
+        "target_should_act": True,
+        "aligned_profiles": ("field_consultant", "student", "night_creator"),
+        "conflict_profiles": ("grandma", "user", "emergency_doctor"),
+        "aligned_reason": "The analogous source case handled both public audio leakage and low battery.",
+        "conflict_reason": "This source case transfers the intervene decision but omits the battery execution detail.",
+    },
+    {
+        "task_family": "execution_dark_only_bed_reading",
+        "task_name": "ExecutionDarkOnlyBedReadingTask",
+        "display": "execution detail: dark mode only",
+        "action": "Enable Dark Mode only.",
+        "conflict_action": "Enable Dark Mode and enable Battery Saver.",
+        "context": "The user is reading in bed with a bright screen; battery is healthy and media is silent.",
+        "conflict_context": "Night reading coincided with low battery for the source profile.",
+        "target_should_act": True,
+        "aligned_profiles": ("night_creator", "student", "emergency_doctor"),
+        "conflict_profiles": ("field_consultant", "grandma", "user"),
+        "aligned_reason": "The analogous source case adjusted display only for night reading.",
+        "conflict_reason": "This source case copies an unnecessary battery action from a different context.",
+    },
+    {
+        "task_family": "execution_dark_dnd_focus_writing",
+        "task_name": "ExecutionDarkDndFocusWritingTask",
+        "display": "execution detail: dark mode plus DND",
+        "action": "Enable Dark Mode and enable DND/Silent mode only.",
+        "conflict_action": "Enable Dark Mode only.",
+        "context": "Late protected writing block with bright screen and no on-call duty.",
+        "conflict_context": "Late reading happened outside a protected focus block.",
+        "target_should_act": True,
+        "aligned_profiles": ("student", "night_creator", "field_consultant"),
+        "conflict_profiles": ("emergency_doctor", "grandma", "user"),
+        "aligned_reason": "The analogous source case used both display comfort and interruption control.",
+        "conflict_reason": "This source case transfers intervention but misses the DND execution detail.",
+    },
+    {
+        "task_family": "execution_dnd_only_day_focus",
+        "task_name": "ExecutionDndOnlyDayFocusTask",
+        "display": "execution detail: DND only",
+        "action": "Enable DND/Silent mode only.",
+        "conflict_action": "Enable DND/Silent mode and enable Dark Mode.",
+        "context": "Daylight implementation focus block with healthy battery and no media or meeting cue.",
+        "conflict_context": "A late-night focus block also required Dark Mode for the source profile.",
+        "target_should_act": True,
+        "aligned_profiles": ("student", "field_consultant", "night_creator"),
+        "conflict_profiles": ("emergency_doctor", "grandma", "user"),
+        "aligned_reason": "The analogous source case protected focus without unrelated display changes.",
+        "conflict_reason": "This source case copies a night display detail into a daylight context.",
+    },
+    {
+        "task_family": "execution_doc_only_imminent_review",
+        "task_name": "ExecutionDocOnlyImminentReviewTask",
+        "display": "execution detail: meeting document only",
+        "action": "Open the meeting PDF only.",
+        "conflict_action": "Open the meeting PDF and enable Battery Saver.",
+        "context": "Design review starts in 3 minutes and the PDF is needed; battery is healthy.",
+        "conflict_context": "A source meeting-prep case also had low battery.",
+        "target_should_act": True,
+        "aligned_profiles": ("field_consultant", "student", "emergency_doctor"),
+        "conflict_profiles": ("grandma", "night_creator", "user"),
+        "aligned_reason": "The analogous source case opened only the needed material.",
+        "conflict_reason": "This source case copies a power-saving detail from a different meeting context.",
+    },
+    {
+        "task_family": "execution_battery_doc_low_power_meeting",
+        "task_name": "ExecutionBatteryDocLowPowerMeetingTask",
+        "display": "execution detail: battery plus meeting document",
+        "action": "Enable Battery Saver and open the meeting PDF only.",
+        "conflict_action": "Open the meeting PDF only.",
+        "context": "Battery is 10%, unplugged, and a design review starts in 3 minutes with the PDF needed.",
+        "conflict_context": "Meeting prep was imminent with healthy battery.",
+        "target_should_act": True,
+        "aligned_profiles": ("field_consultant", "emergency_doctor", "student"),
+        "conflict_profiles": ("grandma", "night_creator", "user"),
+        "aligned_reason": "The analogous source case handled both low power and imminent meeting prep.",
+        "conflict_reason": "This source case transfers intervention but omits the low-battery detail.",
+    },
+    {
+        "task_family": "execution_mute_doc_public_review",
+        "task_name": "ExecutionMuteDocPublicReviewTask",
+        "display": "execution detail: mute plus meeting document",
+        "action": "Mute media volume and open the meeting PDF only.",
+        "conflict_action": "Open the meeting PDF only.",
+        "context": "Earbuds disconnected with media playing in a shared room, and a review starts in 3 minutes.",
+        "conflict_context": "Meeting prep was imminent without any audio leak.",
+        "target_should_act": True,
+        "aligned_profiles": ("field_consultant", "student", "night_creator"),
+        "conflict_profiles": ("grandma", "user", "emergency_doctor"),
+        "aligned_reason": "The analogous source case combined audio safety with meeting prep.",
+        "conflict_reason": "This source case transfers the intervene decision but misses the media-leak execution detail.",
+    },
+    {
+        "task_family": "execution_dark_doc_night_meeting",
+        "task_name": "ExecutionDarkDocNightMeetingTask",
+        "display": "execution detail: dark mode plus meeting document",
+        "action": "Enable Dark Mode and open the meeting PDF only.",
+        "conflict_action": "Open the meeting PDF only.",
+        "context": "Late remote design review starts in 3 minutes; PDF is needed and the room is dim.",
+        "conflict_context": "Meeting prep was imminent during daytime.",
+        "target_should_act": True,
+        "aligned_profiles": ("night_creator", "field_consultant", "student"),
+        "conflict_profiles": ("grandma", "user", "emergency_doctor"),
+        "aligned_reason": "The analogous source case handled both night display comfort and meeting prep.",
+        "conflict_reason": "This source case omits the dark-mode detail needed by the current context.",
+    },
+    {
+        "task_family": "execution_battery_dnd_focus_low",
+        "task_name": "ExecutionBatteryDndFocusLowTask",
+        "display": "execution detail: battery plus DND",
+        "action": "Enable Battery Saver and enable DND/Silent mode only.",
+        "conflict_action": "Enable DND/Silent mode only.",
+        "context": "Battery is 14%, unplugged, and a protected coding block starts with no on-call duty.",
+        "conflict_context": "A focus block started with healthy battery.",
+        "target_should_act": True,
+        "aligned_profiles": ("field_consultant", "student", "night_creator"),
+        "conflict_profiles": ("emergency_doctor", "grandma", "user"),
+        "aligned_reason": "The analogous source case combined battery preservation and focus protection.",
+        "conflict_reason": "This source case transfers intervention but misses the battery execution detail.",
+    },
+    {
+        "task_family": "execution_mute_dark_quiet_night",
+        "task_name": "ExecutionMuteDarkQuietNightTask",
+        "display": "execution detail: mute plus dark mode",
+        "action": "Mute media volume and enable Dark Mode only.",
+        "conflict_action": "Mute media volume only.",
+        "context": "Earbuds disconnected during playback in a quiet late-night workspace with a bright screen.",
+        "conflict_context": "Audio leaked in public during daytime.",
+        "target_should_act": True,
+        "aligned_profiles": ("night_creator", "student", "field_consultant"),
+        "conflict_profiles": ("grandma", "user", "emergency_doctor"),
+        "aligned_reason": "The analogous source case handled both quiet audio and night display comfort.",
+        "conflict_reason": "This source case omits the display adjustment required by the night context.",
+    },
+    {
+        "task_family": "execution_mute_dnd_workshop",
+        "task_name": "ExecutionMuteDndWorkshopTask",
+        "display": "execution detail: mute plus DND",
+        "action": "Mute media volume and enable DND/Silent mode only.",
+        "conflict_action": "Mute media volume only.",
+        "context": "Earbuds disconnected as a hands-on workshop focus block begins in a shared room.",
+        "conflict_context": "Audio leaked in public without a focus block.",
+        "target_should_act": True,
+        "aligned_profiles": ("student", "field_consultant", "night_creator"),
+        "conflict_profiles": ("grandma", "user", "emergency_doctor"),
+        "aligned_reason": "The analogous source case handled both audio leakage and focus protection.",
+        "conflict_reason": "This source case transfers intervention but omits the focus-protection execution detail.",
+    },
+    {
+        "task_family": "execution_triple_quiet_low_night",
+        "task_name": "ExecutionTripleQuietLowNightTask",
+        "display": "execution detail: mute plus battery plus dark mode",
+        "action": "Mute media volume, enable Battery Saver, and enable Dark Mode only.",
+        "conflict_action": "Mute media volume and enable Battery Saver only.",
+        "context": "Audio leak, low battery, and dim late-night workspace coincide.",
+        "conflict_context": "Audio leak and low battery coincided during daytime.",
+        "target_should_act": True,
+        "aligned_profiles": ("night_creator", "field_consultant", "student"),
+        "conflict_profiles": ("grandma", "user", "emergency_doctor"),
+        "aligned_reason": "The analogous source case matched all three quiet low-power night cues.",
+        "conflict_reason": "This source case transfers intervention but misses the night display detail.",
+    },
+    {
+        "task_family": "execution_triple_focus_low_night",
+        "task_name": "ExecutionTripleFocusLowNightTask",
+        "display": "execution detail: battery plus dark mode plus DND",
+        "action": "Enable Battery Saver, enable Dark Mode, and enable DND/Silent mode only.",
+        "conflict_action": "Enable Battery Saver and enable DND/Silent mode only.",
+        "context": "Late protected implementation block with low battery and dim room.",
+        "conflict_context": "Low-battery focus block occurred during daylight.",
+        "target_should_act": True,
+        "aligned_profiles": ("student", "night_creator", "field_consultant"),
+        "conflict_profiles": ("emergency_doctor", "grandma", "user"),
+        "aligned_reason": "The analogous source case matched focus, low-power, and night-display cues.",
+        "conflict_reason": "This source case omits Dark Mode from a night context.",
+    },
+    {
+        "task_family": "execution_triple_meeting_low_night",
+        "task_name": "ExecutionTripleMeetingLowNightTask",
+        "display": "execution detail: battery plus dark mode plus document",
+        "action": "Enable Battery Saver, enable Dark Mode, and open the meeting PDF only.",
+        "conflict_action": "Enable Battery Saver and open the meeting PDF only.",
+        "context": "Late design review starts in 3 minutes with low battery and dim room.",
+        "conflict_context": "Low-battery meeting prep happened during daytime.",
+        "target_should_act": True,
+        "aligned_profiles": ("field_consultant", "night_creator", "student"),
+        "conflict_profiles": ("emergency_doctor", "grandma", "user"),
+        "aligned_reason": "The analogous source case matched meeting prep, low power, and night display needs.",
+        "conflict_reason": "This source case transfers intervention but misses the display detail.",
+    },
+    {
+        "task_family": "execution_triple_public_meeting_low",
+        "task_name": "ExecutionTriplePublicMeetingLowTask",
+        "display": "execution detail: mute plus battery plus document",
+        "action": "Mute media volume, enable Battery Saver, and open the meeting PDF only.",
+        "conflict_action": "Enable Battery Saver and open the meeting PDF only.",
+        "context": "Audio leak, low battery, and imminent meeting document need coincide in a bright room.",
+        "conflict_context": "Low-battery meeting prep happened without audio leakage.",
+        "target_should_act": True,
+        "aligned_profiles": ("field_consultant", "student", "night_creator"),
+        "conflict_profiles": ("emergency_doctor", "grandma", "user"),
+        "aligned_reason": "The analogous source case matched audio safety, low power, and meeting prep.",
+        "conflict_reason": "This source case omits the public audio-leak detail.",
+    },
+    {
+        "task_family": "execution_triple_workshop_night",
+        "task_name": "ExecutionTripleWorkshopNightTask",
+        "display": "execution detail: mute plus dark mode plus DND",
+        "action": "Mute media volume, enable Dark Mode, and enable DND/Silent mode only.",
+        "conflict_action": "Mute media volume and enable DND/Silent mode only.",
+        "context": "Audio leak, bright screen, and protected evening workshop focus block coincide.",
+        "conflict_context": "Audio leak and focus block happened during daylight.",
+        "target_should_act": True,
+        "aligned_profiles": ("student", "night_creator", "field_consultant"),
+        "conflict_profiles": ("emergency_doctor", "grandma", "user"),
+        "aligned_reason": "The analogous source case matched audio, display, and focus cues.",
+        "conflict_reason": "This source case omits the night display detail.",
+    },
+    {
+        "task_family": "execution_all_but_dnd_incident_prep",
+        "task_name": "ExecutionAllButDndIncidentPrepTask",
+        "display": "execution detail: mute plus battery plus dark mode plus document, no DND",
+        "action": "Mute media volume, enable Battery Saver, enable Dark Mode, and open the meeting PDF only.",
+        "conflict_action": "Mute media volume, enable Battery Saver, enable Dark Mode, open the meeting PDF, and enable DND/Silent mode.",
+        "context": "Late incident review prep has audio leak, low battery, dim room, and a needed PDF, but pages must remain audible.",
+        "conflict_context": "A similar all-systems source case happened outside on-call reachability.",
+        "target_should_act": True,
+        "aligned_profiles": ("emergency_doctor", "field_consultant", "night_creator"),
+        "conflict_profiles": ("student", "grandma", "user"),
+        "aligned_reason": "The analogous source case performed every needed action while preserving reachability.",
+        "conflict_reason": "This source case copies DND from a context where reachability was not required.",
+    },
+)
+
+
+EXECUTION_DETAIL_ACTION_VARIANTS: dict[str, tuple[str, tuple[str, str, str]]] = {
+    "ExecutionBatteryDarkLateDocTask": ("set_media_volume:0", ("set_media_volume:1", "set_media_volume:2", "set_media_volume:3")),
+    "ExecutionBatteryOnlyReachableNightTask": ("set_media_volume:2", ("set_media_volume:0", "set_media_volume:3", "set_media_volume:5")),
+    "ExecutionMuteOnlyPublicDemoTask": ("set_media_volume:3", ("set_media_volume:0", "set_media_volume:2", "set_media_volume:6")),
+    "ExecutionMuteBatteryCommuteTask": ("set_media_volume:5", ("set_media_volume:0", "set_media_volume:3", "set_media_volume:7")),
+    "ExecutionDarkOnlyBedReadingTask": ("set_media_volume:1", ("set_media_volume:0", "set_media_volume:2", "set_media_volume:4")),
+    "ExecutionDarkDndFocusWritingTask": ("set_media_volume:4", ("set_media_volume:0", "set_media_volume:2", "set_media_volume:6")),
+    "ExecutionDndOnlyDayFocusTask": ("set_media_volume:6", ("set_media_volume:0", "set_media_volume:3", "set_media_volume:5")),
+    "ExecutionDocOnlyImminentReviewTask": ("set_media_volume:0", ("set_media_volume:1", "set_media_volume:3", "set_media_volume:5")),
+    "ExecutionBatteryDocLowPowerMeetingTask": ("set_dnd_mode:priority", ("set_dnd_mode:none", "set_dnd_mode:alarms", "set_dnd_mode:off")),
+    "ExecutionMuteDocPublicReviewTask": ("set_dnd_mode:none", ("set_dnd_mode:priority", "set_dnd_mode:alarms", "set_dnd_mode:off")),
+    "ExecutionDarkDocNightMeetingTask": ("set_dnd_mode:alarms", ("set_dnd_mode:priority", "set_dnd_mode:none", "set_dnd_mode:off")),
+    "ExecutionBatteryDndFocusLowTask": ("set_dnd_mode:priority", ("set_dnd_mode:none", "set_dnd_mode:alarms", "set_dnd_mode:off")),
+    "ExecutionMuteDarkQuietNightTask": ("set_dnd_mode:none", ("set_dnd_mode:priority", "set_dnd_mode:alarms", "set_dnd_mode:off")),
+    "ExecutionMuteDndWorkshopTask": ("set_dnd_mode:alarms", ("set_dnd_mode:priority", "set_dnd_mode:none", "set_dnd_mode:off")),
+    "ExecutionTripleQuietLowNightTask": ("open_document:Transfer_Gate_Design_Review.pdf", ("open_document:Incident_Runbook_Delta.pdf", "open_document:API_Migration_Checklist.pdf", "open_document:Mobile_UI_Color_Audit.pdf")),
+    "ExecutionTripleFocusLowNightTask": ("open_document:Incident_Runbook_Delta.pdf", ("open_document:Transfer_Gate_Design_Review.pdf", "open_document:Latency_Regression_Notes.pdf", "open_document:Oncall_Handoff_OnePager.pdf")),
+    "ExecutionTripleMeetingLowNightTask": ("open_document:API_Migration_Checklist.pdf", ("open_document:Transfer_Gate_Design_Review.pdf", "open_document:Incident_Runbook_Delta.pdf", "open_document:Latency_Regression_Notes.pdf")),
+    "ExecutionTriplePublicMeetingLowTask": ("open_document:Latency_Regression_Notes.pdf", ("open_document:API_Migration_Checklist.pdf", "open_document:Transfer_Gate_Design_Review.pdf", "open_document:Oncall_Handoff_OnePager.pdf")),
+    "ExecutionTripleWorkshopNightTask": ("open_document:Mobile_UI_Color_Audit.pdf", ("open_document:Transfer_Gate_Design_Review.pdf", "open_document:API_Migration_Checklist.pdf", "open_document:Oncall_Handoff_OnePager.pdf")),
+    "ExecutionAllButDndIncidentPrepTask": ("open_document:Oncall_Handoff_OnePager.pdf", ("open_document:Incident_Runbook_Delta.pdf", "open_document:Latency_Regression_Notes.pdf", "open_document:Mobile_UI_Color_Audit.pdf")),
+}
 
 
 def utc_now() -> str:
@@ -974,13 +1525,33 @@ def _background_episode_from_profile(
     return _attach_phase_a_fields(enrich_memory_schema(episode))
 
 
-def _first_matching_habit(profile: dict[str, Any], spec: dict[str, Any]) -> tuple[str | None, dict[str, Any] | None]:
+def _matching_habit_evidence(
+    profile: dict[str, Any],
+    spec: dict[str, Any],
+) -> tuple[str | None, dict[str, Any] | None, bool]:
     habits = profile.get("habits", {}) if isinstance(profile.get("habits"), dict) else {}
-    for habit_key in spec.get("habit_keys", ()):
+    habit_keys = tuple(str(item) for item in spec.get("habit_keys", ()) if item)
+    matches: list[tuple[str, dict[str, Any]]] = []
+    for habit_key in habit_keys:
         habit = habits.get(habit_key)
         if isinstance(habit, dict) and habit:
-            return str(habit_key), habit
-    return None, None
+            matches.append((habit_key, habit))
+    if not matches:
+        return None, None, False
+    # Single-family tasks need one matching habit. Composite task-family memories
+    # should be positive only when every component habit is present; otherwise
+    # source-only transfer becomes noisy and over-optimistic.
+    has_all_required = len(matches) == len(habit_keys)
+    if len(matches) == 1:
+        return matches[0][0], matches[0][1], has_all_required
+    merged = {
+        "description": " + ".join(
+            str(habit.get("description", key)) for key, habit in matches
+        ),
+        "trigger": {key: habit.get("trigger", {}) for key, habit in matches},
+        "action": {key: habit.get("action", {}) for key, habit in matches},
+    }
+    return "+".join(key for key, _ in matches), merged, has_all_required
 
 
 def _task_matrix_episode(
@@ -994,8 +1565,7 @@ def _task_matrix_episode(
     ensure_embedded_memrl_importable()
     from agent.memrl.schema import enrich_memory_schema
 
-    habit_name, habit = _first_matching_habit(profile, spec)
-    has_habit = habit is not None
+    habit_name, habit, has_habit = _matching_habit_evidence(profile, spec)
     family = str(spec["task_family"])
     scenario_type = _scenario_type(has_habit=has_habit, variant_index=variant_index)
     should_act = has_habit and scenario_type != "near_miss_abstain"
@@ -1122,6 +1692,380 @@ def _task_matrix_episode(
         "updated_at": now,
     }
     return _attach_phase_a_fields(enrich_memory_schema(episode))
+
+
+def _stress_candidate(spec: dict[str, Any], should_act: bool) -> dict[str, Any]:
+    family = str(spec["task_family"])
+    if not should_act:
+        return {"purpose": None, "proactive_task": None, "response": None, "operation": "nop"}
+    action = str(spec.get("source_action") or spec["action"])
+    context = str(spec.get("source_context") or spec["context"])
+    return {
+        "purpose": f"Use analogous cross-profile evidence for {spec['display']}.",
+        "proactive_task": f"{action} Context: {context}",
+        "response": f"I can handle this now: {action}",
+        "operation": f"knowu.routine.{family}",
+    }
+
+
+def _is_execution_stress_spec(spec: dict[str, Any]) -> bool:
+    return str(spec.get("task_family", "")).startswith("execution_")
+
+
+def _source_action_components(action: str) -> tuple[str, ...]:
+    lowered = action.lower()
+    components: list[str] = []
+    if "mute media" in lowered or "media volume" in lowered or "set_media_volume" in lowered:
+        components.append("media")
+    if "battery saver" in lowered:
+        components.append("battery")
+    if "dark mode" in lowered:
+        components.append("dark")
+    if "dnd" in lowered or "silent mode" in lowered or "set_dnd_mode" in lowered:
+        components.append("dnd")
+    if "meeting pdf" in lowered or "meeting document" in lowered or "pdf" in lowered or "open_document" in lowered:
+        components.append("doc")
+    return tuple(components)
+
+
+_EXECUTION_COMPONENT_CONTEXTS: dict[str, tuple[str, ...]] = {
+    "media": (
+        "wireless audio dropped while a tutorial clip was still playing near other people",
+        "headphones disconnected during playback in a semi-public work area",
+        "a video continued through the phone speaker after the audio device detached",
+        "media playback became audible just before the user entered a shared discussion space",
+    ),
+    "battery": (
+        "battery was below the user's low-power threshold and the phone was unplugged",
+        "the phone had little charge left before a charger would be available",
+        "the source user needed the device to last through the next coordination window",
+        "the battery warning appeared while the user was away from power",
+    ),
+    "dark": (
+        "the screen was bright during late-night reading in a dim room",
+        "night work moved to a low-light setting where the display was uncomfortable",
+        "the user was reviewing non-color-critical text after dark",
+        "a late reading session made a darker display setting preferable",
+    ),
+    "dnd": (
+        "a protected focus interval had started and no urgent reachability duty was active",
+        "the user entered a workshop block where interruptions would break concentration",
+        "calendar showed a short concentration window with notifications still normal",
+        "the source user wanted quiet execution time and had no live incident channel to monitor",
+    ),
+    "doc": (
+        "a scheduled review was starting soon and the relevant local PDF was still closed",
+        "meeting prep required opening the agenda document shortly before the call",
+        "the source user's calendar reminder referenced a document needed in a few minutes",
+        "a near-term discussion needed the preparation file ready on screen",
+    ),
+}
+
+
+_EXECUTION_CONTEXT_FRAMES: tuple[str, ...] = (
+    "Source-neighbor case, not the held-out developer test: {cues}.",
+    "Comparable source-profile episode with a different app/time surface: {cues}.",
+    "Similar but non-identical execution memory from the source profile: {cues}.",
+    "Prior source scenario with the same action pattern but different concrete details: {cues}.",
+)
+
+
+def _execution_source_context(
+    *,
+    spec: dict[str, Any],
+    source_action: str,
+    profile_id: str,
+    variant_slot: int,
+    source_alignment: str,
+) -> str:
+    components = _source_action_components(source_action)
+    if not components:
+        return str(spec.get("source_context") or spec["context"])
+    if source_action.startswith("set_media_volume:"):
+        level = source_action.split(":", 1)[1]
+        media_contexts = (
+            f"wireless audio dropped near others and the source user set media volume to {level}",
+            f"a speaker-volume adjustment was needed during a different audio check, target level {level}",
+            f"the source profile used a non-default media volume detail, level {level}, after earbuds disconnected",
+            f"background playback was too loud in a different room, so the source action set level {level}",
+        )
+        return _EXECUTION_CONTEXT_FRAMES[variant_slot % len(_EXECUTION_CONTEXT_FRAMES)].format(
+            cues=f"{media_contexts[variant_slot % len(media_contexts)]}; this is an audio-detail memory for {profile_id}"
+        )
+    if source_action.startswith("set_dnd_mode:"):
+        mode = source_action.split(":", 1)[1]
+        dnd_contexts = (
+            f"a focus/rest block required DND mode {mode} in the source profile",
+            f"notifications had to be filtered with DND detail {mode} in a different schedule window",
+            f"the source user used DND parameter {mode} under a different reachability constraint",
+            f"a prior source episode chose DND mode {mode}, not just generic DND",
+        )
+        return _EXECUTION_CONTEXT_FRAMES[variant_slot % len(_EXECUTION_CONTEXT_FRAMES)].format(
+            cues=f"{dnd_contexts[variant_slot % len(dnd_contexts)]}; this is a DND-mode memory for {profile_id}"
+        )
+    if source_action.startswith("open_document:"):
+        doc_name = source_action.split(":", 1)[1]
+        doc_contexts = (
+            f"a near-term meeting needed document object {doc_name}",
+            f"the source profile opened {doc_name} for a different review context",
+            f"a calendar reminder pointed to {doc_name}, while other PDFs were distractors",
+            f"the useful action was opening exactly {doc_name} in a prior source episode",
+        )
+        return _EXECUTION_CONTEXT_FRAMES[variant_slot % len(_EXECUTION_CONTEXT_FRAMES)].format(
+            cues=f"{doc_contexts[variant_slot % len(doc_contexts)]}; this is a document-object memory for {profile_id}"
+        )
+    cues = "; ".join(
+        _EXECUTION_COMPONENT_CONTEXTS[component][variant_slot % len(_EXECUTION_COMPONENT_CONTEXTS[component])]
+        for component in components
+    )
+    if source_alignment == "negative_transfer_conflict":
+        cues = (
+            f"{cues}; this was useful for {profile_id}, but one execution detail differs "
+            "from the developer target context"
+        )
+    else:
+        cues = f"{cues}; the same action set was useful for {profile_id}"
+    frame = _EXECUTION_CONTEXT_FRAMES[variant_slot % len(_EXECUTION_CONTEXT_FRAMES)]
+    return frame.format(cues=cues)
+
+
+def _stress_episode(
+    *,
+    profile_id: str,
+    spec: dict[str, Any],
+    should_act: bool,
+    variant_index: int,
+    max_log_items: int,
+    source_alignment: str,
+) -> dict[str, Any]:
+    ensure_embedded_memrl_importable()
+    from agent.memrl.schema import enrich_memory_schema
+
+    family = str(spec["task_family"])
+    target_should_act = bool(spec["target_should_act"])
+    source_action = str(spec.get("source_action") or spec["action"])
+    target_action = str(spec["action"])
+    source_context = str(spec.get("source_context") or spec["context"])
+    is_execution_match = source_action == target_action
+    is_helpful_for_target = should_act == target_should_act and is_execution_match
+    q_value = 0.9 if is_helpful_for_target else 0.82
+    reward = q_value
+    level = 2 if should_act else 0
+    reason_key = "aligned_reason" if is_helpful_for_target else "conflict_reason"
+    observations = _log_window_observations_for_profile(
+        profile_id,
+        max_items=max_log_items,
+        variant_index=variant_index,
+    )
+    observations.extend(
+        [
+            {
+                "time": "current",
+                "source": "synthetic_transfer_stress_context",
+                "event": _compact(
+                    f"profile:{profile_id} task_family:{family} scenario:{source_alignment} "
+                    f"context:{source_context} source_action:{source_action} "
+                    "target_profile:developer transfer_stress:true",
+                    max_len=1600,
+                ),
+                "profile_id": profile_id,
+                "task_family": family,
+                "variant_index": variant_index,
+                "scenario_type": source_alignment,
+            },
+            {
+                "time": "long_term",
+                "source": "cross_profile_transfer_outcome",
+                "event": _compact(
+                    f"In a similar {spec['display']} situation, {profile_id} "
+                    f"{'benefited from this execution' if should_act else 'benefited from abstaining'}. "
+                    f"Source action: {source_action}. Target developer action: {target_action}. "
+                    f"Transfer note for developer: {spec[reason_key]}",
+                    max_len=1200,
+                ),
+                "profile_id": profile_id,
+                "task_family": family,
+                "target_profile": "developer",
+            },
+        ]
+    )
+    candidate = _stress_candidate(spec, should_act)
+    simulation = {
+        "acceptance": "accept" if should_act else "ignore",
+        "acceptance_confidence": 0.9 if should_act else 0.84,
+        "flow_impact": "unchanged" if should_act else "disrupted",
+        "relevance": "high" if should_act else "low",
+        "timing": "good" if should_act else "bad",
+        "reasoning": spec[reason_key],
+    }
+    decision = {
+        "should_intervene": should_act,
+        "commitment_level": level,
+        "risk": "low" if should_act else "medium",
+        "reason": spec[reason_key],
+    }
+    target_key = f"developer::{family}"
+    initial_gate = 0.35
+    now = utc_now()
+    episode = {
+        "memory_id": f"knowu-transfer-stress-{profile_id}-{family}-v{variant_index}",
+        "sample_id": f"transfer_stress::{profile_id}::{family}::v{variant_index}",
+        "source": "knowu_profile_task_matrix_synthetic",
+        "domain": "mobile_routine",
+        "observations": observations,
+        "intent_text": _compact(
+            f"{profile_id} / {family} / {source_alignment}: {source_context} {source_action}. {spec[reason_key]}",
+            max_len=2400,
+        ),
+        "context_family": f"knowu_profile_task_{family}",
+        "action_family": "no_intervention" if not should_act else f"knowu_profile_task_{family}",
+        "outcome_family": "helpful_intervention" if should_act else "correct_abstain",
+        "candidate": candidate,
+        "simulation": simulation,
+        "decision": decision,
+        "labels": {
+            "y_need": int(should_act),
+            "y_accept": int(should_act),
+            "gold_should": should_act,
+            "gold_level": level,
+            "profile_id": profile_id,
+            "task_family": family,
+            "task_name": spec["task_name"],
+            "label_source": "cross_profile_transfer_stress",
+            "scenario_type": source_alignment,
+            "transfer_target_profile": "developer",
+            "transfer_target_should_act": target_should_act,
+            "transfer_target_action": target_action,
+            "source_action": source_action,
+            "execution_action_match": is_execution_match,
+            "is_helpful_for_target": is_helpful_for_target,
+            "initial_q_value": q_value,
+        },
+        "transfer_stats": {
+            target_key: {
+                "gate": initial_gate,
+                "visits": 0,
+                "last_reward": 0.0,
+                "updated_at": now,
+            }
+        },
+        "reward": reward,
+        "q_value": q_value,
+        "q_visits": 2,
+        "created_at": now,
+        "updated_at": now,
+    }
+    return _attach_phase_a_fields(enrich_memory_schema(episode))
+
+
+def _stress_transfer_episodes(
+    *,
+    max_log_items: int,
+    users: set[str] | None,
+) -> list[dict[str, Any]]:
+    episodes: list[dict[str, Any]] = []
+    for spec in STRESS_TRANSFER_TASK_SPECS:
+        if _is_execution_stress_spec(spec):
+            target_action, near_miss_actions = EXECUTION_DETAIL_ACTION_VARIANTS[str(spec["task_name"])]
+            profile_ids = tuple(dict.fromkeys((*spec["aligned_profiles"], *spec["conflict_profiles"])))
+            for profile_index, profile_id in enumerate(profile_ids):
+                if users is not None and profile_id not in users:
+                    continue
+                source_actions = (target_action, *near_miss_actions)
+                for variant_slot, source_action in enumerate(source_actions):
+                    source_spec = {
+                        **spec,
+                        "action": target_action,
+                        "source_action": source_action,
+                        "source_context": _execution_source_context(
+                            spec=spec,
+                            source_action=source_action,
+                            profile_id=profile_id,
+                            variant_slot=variant_slot,
+                            source_alignment=(
+                                "exact_detail_match"
+                                if source_action == target_action
+                                else "same_action_different_detail"
+                            ),
+                        ),
+                    }
+                    episodes.append(
+                        _stress_episode(
+                            profile_id=profile_id,
+                            spec=source_spec,
+                            should_act=True,
+                            variant_index=(profile_index * 4) + variant_slot,
+                            max_log_items=max_log_items,
+                            source_alignment=(
+                                "exact_detail_match"
+                                if source_action == target_action
+                                else "same_action_different_detail"
+                            ),
+                        )
+                    )
+            continue
+
+        variants_per_profile = 1
+        for variant_index, profile_id in enumerate(spec["aligned_profiles"]):
+            if users is not None and profile_id not in users:
+                continue
+            for variant_slot in range(variants_per_profile):
+                source_action = str(spec["action"])
+                source_spec = {
+                    **spec,
+                    "source_action": source_action,
+                    "source_context": _execution_source_context(
+                        spec=spec,
+                        source_action=source_action,
+                        profile_id=profile_id,
+                        variant_slot=variant_slot,
+                        source_alignment="target_aligned_transfer",
+                    )
+                    if _is_execution_stress_spec(spec)
+                    else spec["context"],
+                }
+                episodes.append(
+                    _stress_episode(
+                        profile_id=profile_id,
+                        spec=source_spec,
+                        should_act=bool(spec["target_should_act"]),
+                        variant_index=(variant_index * variants_per_profile) + variant_slot,
+                        max_log_items=max_log_items,
+                        source_alignment="target_aligned_transfer",
+                    )
+                )
+        for variant_offset, profile_id in enumerate(spec["conflict_profiles"]):
+            if users is not None and profile_id not in users:
+                continue
+            for variant_slot in range(variants_per_profile):
+                conflict_should_act = bool(spec["target_should_act"]) if spec.get("conflict_action") else not bool(spec["target_should_act"])
+                conflict_spec = spec
+                if spec.get("conflict_action"):
+                    source_action = str(spec["conflict_action"])
+                    conflict_spec = {
+                        **spec,
+                        "source_action": source_action,
+                        "source_context": _execution_source_context(
+                            spec=spec,
+                            source_action=source_action,
+                            profile_id=profile_id,
+                            variant_slot=variant_slot,
+                            source_alignment="negative_transfer_conflict",
+                        )
+                        if _is_execution_stress_spec(spec)
+                        else spec.get("conflict_context", spec["context"]),
+                    }
+                episodes.append(
+                    _stress_episode(
+                        profile_id=profile_id,
+                        spec=conflict_spec,
+                        should_act=conflict_should_act,
+                        variant_index=100 + (variant_offset * variants_per_profile) + variant_slot,
+                        max_log_items=max_log_items,
+                        source_alignment="negative_transfer_conflict",
+                    )
+                )
+    return episodes
 
 
 def _make_generation_row(episode: dict[str, Any]) -> dict[str, Any]:
@@ -1384,6 +2328,7 @@ def build_knowu_profile_task_matrix_bundle(
     max_log_items: int = 24,
     users: set[str] | None = None,
     target_count: int = 256,
+    include_transfer_stress: bool = True,
 ) -> dict[str, Any]:
     """Build a larger profile x routine-family memory matrix.
 
@@ -1425,6 +2370,10 @@ def build_knowu_profile_task_matrix_bundle(
                 )
             )
         variant_index += 1
+    stress_episodes: list[dict[str, Any]] = []
+    if include_transfer_stress:
+        stress_episodes = _stress_transfer_episodes(max_log_items=max_log_items, users=users)
+        episodes.extend(stress_episodes)
 
     by_task_family: dict[str, int] = {}
     for episode in episodes:
@@ -1440,6 +2389,8 @@ def build_knowu_profile_task_matrix_bundle(
             "profile_dir": str(resolved_profile_dir),
             "target_count": target_count,
             "routine_task_families": len(ROUTINE_TASK_SPECS),
+            "transfer_stress_task_families": len(STRESS_TRANSFER_TASK_SPECS) if include_transfer_stress else 0,
+            "transfer_stress_episodes": len(stress_episodes),
             "base_profile_task_pairs": len(base_pairs),
             "scenarios_per_profile_task_pair": scenarios_per_pair,
             "variants_generated": variant_index,

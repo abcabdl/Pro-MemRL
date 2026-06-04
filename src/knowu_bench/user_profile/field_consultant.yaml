@@ -1,0 +1,83 @@
+version: "1.0"
+description: "Synthetic source profile: traveling field consultant with partial transferable routines."
+created_at: "2026-06-01T00:00:00Z"
+
+user_profile:
+  identity:
+    full_name: "Priya Raman"
+    nickname: "priya-field"
+    age: 33
+    occupation: "Field Operations Consultant"
+    employer: "NorthBridge Consulting"
+    contact_info:
+      email_work: "priya.raman@northbridge.example"
+      phone: "+86 139-1000-3400"
+
+  locations:
+    home:
+      address: "Shanghai serviced apartment"
+      label: "Apartment"
+    work:
+      address: "Client sites across China"
+      label: "Client Site"
+
+  digital_context:
+    devices:
+      - "Android Phone"
+      - "Windows Laptop"
+    system_settings:
+      language: "English (US)"
+      theme: "Light by day, dark during travel"
+      time_zone: "Asia/Shanghai"
+
+  habits:
+    low_battery_saver:
+      description: "Enables Battery Saver when battery is low during travel between client sites."
+      trigger:
+        condition: "Battery level <= 15%"
+        context_cue: "Travel day with limited charging access"
+      action:
+        type: "change_settings"
+        settings: ["power_saving_mode"]
+
+    bluetooth_cleanup:
+      description: "Mutes media when Bluetooth earbuds disconnect in client offices or trains."
+      trigger:
+        condition: "Bluetooth disconnected"
+        context_cue: "Presentation audio or music could leak in public"
+      action:
+        type: "change_settings"
+        settings: ["mute_media_volume"]
+
+    clock_out_routine:
+      description: "Sends an end-of-day client-site handover update to the operations channel."
+      trigger:
+        type: "time_event"
+        time: "18:00"
+        days: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+      action:
+        type: "send_message"
+        app: "Mattermost"
+        channel: "field-ops"
+        content: "Field visit complete, notes uploaded"
+
+  preferences:
+    apps:
+      mattermost:
+        preferred_channel: "field-ops"
+      browser: "Chrome"
+      navigation_app: "Maps"
+    social:
+      communication_style:
+        format: "Concise client-safe updates."
+
+  decision_criteria:
+    priorities: ["Client privacy", "Battery life", "Professionalism"]
+
+  social_graph:
+    routine:
+      - name: "Field Ops Team"
+        role: "Handover Recipients"
+        app_preference: "Mattermost"
+
+environment_init_state: {}

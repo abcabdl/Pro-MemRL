@@ -211,3 +211,54 @@ def test_generation_prior_uses_value_aware_buckets() -> None:
     assert recommendation["balanced_intervene_count"] == recommendation["balanced_abstain_count"]
     assert "generation_recommendation" in prior["generation_context"]
     assert "value_aware_examples" in prior["generation_context"]
+
+
+def test_execution_target_can_cold_start_from_stress_source_memory(monkeypatch) -> None:
+    monkeypatch.setenv("KNOWU_MEMRL_TRANSFER_GATE_MODE", "default")
+    monkeypatch.setenv("KNOWU_MEMRL_DISABLE_TRANSFER_GATE", "false")
+    retriever = MemRLRetriever(topk=4, sim_threshold=0.0)
+    memory = {
+        **_memory(
+            "stress-dark",
+            task="Enable Dark Mode for late document reading.",
+            should=True,
+            level=2,
+            acceptance="accept",
+            q_value=0.9,
+        ),
+        "context_family": "knowu_profile_task_stress_late_reading_dark_mode",
+        "action_family": "knowu_profile_task_stress_late_reading_dark_mode",
+        "labels": {
+            "profile_id": "night_creator",
+            "task_family": "stress_late_reading_dark_mode",
+        },
+    }
+    retriever.build([memory])
+
+    observations = [
+        {
+            "event": (
+                "profile:developer task_family:execution_battery_dark_late_doc "
+                "Battery is low and the user is reading API docs in a dim room."
+            )
+        }
+    ]
+    signals = {"need": 0.7, "risk": 0.2, "flow": 0.3}
+    generation = retriever.retrieve_for_generation(observations, signals)
+    simulation = retriever.retrieve_for_simulation(
+        observations,
+        {"proactive_task": "Enable Dark Mode for late document reading."},
+        signals,
+    )
+    decision = retriever.retrieve_for_decision(
+        observations,
+        {"proactive_task": "Enable Dark Mode for late document reading."},
+        simulation,
+        signals,
+    )
+
+    assert generation["candidate_positive_examples"]
+    assert generation["generation_recommendation"]["confidence"] > 0.0
+    assert decision["intervene_memories"]
+    assert decision["memory_recommendation"]["should_intervene"] is True
+    assert decision["transfer_target_families"]["stress-dark"] == "execution_battery_dark_late_doc"

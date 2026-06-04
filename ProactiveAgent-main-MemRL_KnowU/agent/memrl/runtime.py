@@ -10,7 +10,9 @@ from .retriever import MemRLRetriever
 from .updater import update_q_value, update_transfer_value
 
 
-_PROFILE_RE = re.compile(r"(developer|student|grandma|user)")
+_PROFILE_RE = re.compile(
+    r"(developer|student|grandma|user|emergency_doctor|field_consultant|night_creator)"
+)
 
 
 def _labels(memory: dict[str, Any]) -> dict[str, Any]:
@@ -51,6 +53,36 @@ def _task_family(memory: dict[str, Any]) -> str | None:
         "ScamSmsInterceptRoutineTask": "scam_sms_intercept",
         "WeekendSleeperTask": "weekend_sleeper",
         "WeeklyReportRoutineTask": "weekly_report",
+        "StressCriticalReachabilityBatterySaverTask": "stress_critical_reachability_battery_saver",
+        "StressNavigationBatterySaverBoundaryTask": "stress_navigation_battery_saver_boundary",
+        "StressPublicBluetoothLeakMuteTask": "stress_public_bluetooth_leak_mute",
+        "StressPrivateBluetoothBoundaryTask": "stress_private_bluetooth_boundary",
+        "StressLateReadingDarkModeTask": "stress_late_reading_dark_mode",
+        "StressColorReviewDarkModeBoundaryTask": "stress_color_review_dark_mode_boundary",
+        "StressFocusBlockDndTask": "stress_focus_block_dnd",
+        "StressOnCallDndBoundaryTask": "stress_on_call_dnd_boundary",
+        "StressImminentMeetingOpenDocTask": "stress_imminent_meeting_open_doc",
+        "StressMeetingNotImminentBoundaryTask": "stress_meeting_not_imminent_boundary",
+        "ExecutionBatteryDarkLateDocTask": "execution_battery_dark_late_doc",
+        "ExecutionBatteryOnlyReachableNightTask": "execution_battery_only_reachable_night",
+        "ExecutionMuteOnlyPublicDemoTask": "execution_mute_only_public_demo",
+        "ExecutionMuteBatteryCommuteTask": "execution_mute_battery_commute",
+        "ExecutionDarkOnlyBedReadingTask": "execution_dark_only_bed_reading",
+        "ExecutionDarkDndFocusWritingTask": "execution_dark_dnd_focus_writing",
+        "ExecutionDndOnlyDayFocusTask": "execution_dnd_only_day_focus",
+        "ExecutionDocOnlyImminentReviewTask": "execution_doc_only_imminent_review",
+        "ExecutionBatteryDocLowPowerMeetingTask": "execution_battery_doc_low_power_meeting",
+        "ExecutionMuteDocPublicReviewTask": "execution_mute_doc_public_review",
+        "ExecutionDarkDocNightMeetingTask": "execution_dark_doc_night_meeting",
+        "ExecutionBatteryDndFocusLowTask": "execution_battery_dnd_focus_low",
+        "ExecutionMuteDarkQuietNightTask": "execution_mute_dark_quiet_night",
+        "ExecutionMuteDndWorkshopTask": "execution_mute_dnd_workshop",
+        "ExecutionTripleQuietLowNightTask": "execution_triple_quiet_low_night",
+        "ExecutionTripleFocusLowNightTask": "execution_triple_focus_low_night",
+        "ExecutionTripleMeetingLowNightTask": "execution_triple_meeting_low_night",
+        "ExecutionTriplePublicMeetingLowTask": "execution_triple_public_meeting_low",
+        "ExecutionTripleWorkshopNightTask": "execution_triple_workshop_night",
+        "ExecutionAllButDndIncidentPrepTask": "execution_all_but_dnd_incident_prep",
     }
     for prefix, family in mapping.items():
         if prefix in task_name:
@@ -201,6 +233,11 @@ class ProactiveMemRLRuntime:
         episode_labels = episode.get("labels", {}) if isinstance(episode.get("labels"), dict) else {}
         target_profile = episode_labels.get("profile_id")
         target_task = episode_labels.get("task_family")
+        transfer_target_families = (
+            episode_labels.get("transfer_target_families", {})
+            if isinstance(episode_labels.get("transfer_target_families"), dict)
+            else {}
+        )
         target = _target_key(
             str(target_profile) if target_profile else None,
             str(target_task) if target_task else None,
@@ -211,12 +248,20 @@ class ProactiveMemRLRuntime:
                 continue
             source_profile = _profile_id(memory)
             source_task = _task_family(memory)
+            explicit_feedback_task = transfer_target_families.get(str(memory_id))
+            feedback_task = str(explicit_feedback_task or target_task or "")
+            feedback_target = _target_key(
+                str(target_profile) if target_profile else None,
+                feedback_task or None,
+            )
             if not target:
                 update_q_value(memory, reward, alpha=self.alpha)
             elif source_profile == target_profile and source_task == target_task:
                 update_q_value(memory, reward, alpha=self.alpha)
-            elif source_profile != target_profile and source_task == target_task:
-                update_transfer_value(memory, target, reward, alpha=self.alpha)
+            elif feedback_target and source_profile != target_profile and (
+                source_task == feedback_task or explicit_feedback_task is not None
+            ):
+                update_transfer_value(memory, feedback_target, reward, alpha=self.alpha)
         if episode:
             candidate = dict(episode)
             if "memory_id" not in candidate and "sample_id" in candidate:
@@ -269,7 +314,12 @@ def record_feedback_payload(
     memrl_payload = feedback_payload.get("memrl", {}) if isinstance(feedback_payload, dict) else {}
     if not isinstance(memrl_payload, dict):
         return
-    used_memory_ids = list(memrl_payload.get("used_memory_ids", []) or [])
+    used_memory_ids = list(
+        memrl_payload.get("chosen_memory_ids", [])
+        if "chosen_memory_ids" in memrl_payload
+        else memrl_payload.get("used_memory_ids", [])
+        or []
+    )
     episode = memrl_payload.get("episode", {}) if isinstance(memrl_payload.get("episode"), dict) else {}
     runtime = ProactiveMemRLRuntime(alpha=alpha, topk=topk, sim_threshold=sim_threshold)
     snapshot = Path(state_dir) / "memrl_snapshot.jsonl"

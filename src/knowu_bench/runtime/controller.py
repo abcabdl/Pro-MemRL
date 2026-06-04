@@ -398,9 +398,12 @@ class AndroidController:
 
             if result.success and "OK" in result.output:
                 logger.info(f"Successfully loaded snapshot: {tag}")
-                # Wait a moment for the snapshot to fully load
-                time.sleep(3)
-                return True
+                for _ in range(30):
+                    if self.check_health():
+                        return True
+                    time.sleep(2)
+                logger.error(f"Snapshot {tag} loaded, but device {self.device} did not become healthy")
+                return False
             else:
                 logger.error(
                     f"Failed to load snapshot {tag}: {result.error if not result.success else result.output}"

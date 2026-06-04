@@ -1,11 +1,20 @@
 import json
 import os
+import shutil
 from datetime import datetime
 
 from loguru import logger
 from PIL import Image, ImageDraw
 
 from knowu_bench.runtime.utils.models import Observation
+
+
+def _move_if_exists(src: str, dst: str) -> None:
+    try:
+        if os.path.exists(src):
+            shutil.move(src, dst)
+    except FileNotFoundError:
+        logger.warning(f"Trajectory backup source disappeared before move: {src}")
 
 
 def save_screenshot(screenshot, path) -> None:
@@ -101,7 +110,7 @@ class TrajLogger:
         os.makedirs(self.log_file_dir, exist_ok=True)
         os.makedirs(os.path.join(self.log_file_dir, self.screenshots_dir), exist_ok=True)
         os.makedirs(os.path.join(self.log_file_dir, self.marked_screenshots_dir), exist_ok=True)
-        with open(os.path.join(self.log_file_dir, self.log_file_name), "w") as f:
+        with open(os.path.join(self.log_file_dir, self.log_file_name), "w", encoding="utf-8") as f:
             json.dump({}, f)
 
     def log_traj(
@@ -116,7 +125,7 @@ class TrajLogger:
     ) -> None:
         task_id = "0"
 
-        with open(os.path.join(self.log_file_dir, self.log_file_name)) as f:
+        with open(os.path.join(self.log_file_dir, self.log_file_name), encoding="utf-8") as f:
             log_data = json.load(f)
 
         if task_id not in log_data:
@@ -134,7 +143,7 @@ class TrajLogger:
         )
         log_data[task_id]["token_usage"] = token_usage
 
-        with open(os.path.join(self.log_file_dir, self.log_file_name), "w") as f:
+        with open(os.path.join(self.log_file_dir, self.log_file_name), "w", encoding="utf-8") as f:
             json.dump(log_data, f, ensure_ascii=False, indent=4)
 
         original_screenshot_path = os.path.join(
@@ -166,7 +175,7 @@ class TrajLogger:
         self.tools = tools
 
     def log_score(self, score: float, reason: str = "Unknown reason"):
-        with open(os.path.join(self.log_file_dir, self.score_file_name), "w") as f:
+        with open(os.path.join(self.log_file_dir, self.score_file_name), "w", encoding="utf-8") as f:
             f.write(f"score: {score}\nreason: {reason}")
 
         # reset tools after logging score
@@ -174,17 +183,17 @@ class TrajLogger:
 
     def log_memrl_plan(self, plan: dict) -> None:
         """Persist the full MemRL plan used by this task."""
-        with open(os.path.join(self.log_file_dir, MEMRL_PLAN_FILE_NAME), "w") as f:
+        with open(os.path.join(self.log_file_dir, MEMRL_PLAN_FILE_NAME), "w", encoding="utf-8") as f:
             json.dump(plan or {}, f, ensure_ascii=False, indent=4)
 
     def log_token_usage(self, token_usage: dict[str, int]) -> None:
         """Log token usage to traj.json."""
-        with open(os.path.join(self.log_file_dir, self.log_file_name)) as f:
+        with open(os.path.join(self.log_file_dir, self.log_file_name), encoding="utf-8") as f:
             log_data = json.load(f)
 
         log_data["token_usage"] = token_usage
 
-        with open(os.path.join(self.log_file_dir, self.log_file_name), "w") as f:
+        with open(os.path.join(self.log_file_dir, self.log_file_name), "w", encoding="utf-8") as f:
             json.dump(log_data, f, ensure_ascii=False, indent=4)
 
     def reset_traj(self):
@@ -192,24 +201,22 @@ class TrajLogger:
 
         # Backup screenshots dir
         screenshots_path = os.path.join(self.log_file_dir, self.screenshots_dir)
-        if os.path.exists(screenshots_path):
-            os.rename(screenshots_path, f"{screenshots_path}_backup_{timestamp}")
+        _move_if_exists(screenshots_path, f"{screenshots_path}_backup_{timestamp}")
 
         # Backup marked_screenshots dir
         marked_path = os.path.join(self.log_file_dir, self.marked_screenshots_dir)
-        if os.path.exists(marked_path):
-            os.rename(marked_path, f"{marked_path}_backup_{timestamp}")
+        _move_if_exists(marked_path, f"{marked_path}_backup_{timestamp}")
 
         # Backup traj.json
         traj_path = os.path.join(self.log_file_dir, self.log_file_name)
         if os.path.exists(traj_path):
             backup_traj_path = os.path.join(self.log_file_dir, f"traj_backup_{timestamp}.json")
-            os.rename(traj_path, backup_traj_path)
+            _move_if_exists(traj_path, backup_traj_path)
 
         # Recreate directories and empty traj.json
         os.makedirs(screenshots_path, exist_ok=True)
         os.makedirs(marked_path, exist_ok=True)
-        with open(traj_path, "w") as f:
+        with open(traj_path, "w", encoding="utf-8") as f:
             json.dump({}, f)
 
         self.tools = None

@@ -1,0 +1,84 @@
+version: "1.0"
+description: "Synthetic source profile: emergency doctor with transferable but non-technical routines."
+created_at: "2026-06-01T00:00:00Z"
+
+user_profile:
+  identity:
+    full_name: "Dr. Elena Ruiz"
+    nickname: "elena-er"
+    age: 36
+    occupation: "Emergency Physician"
+    employer: "Haidian General Hospital"
+    contact_info:
+      email_work: "elena.ruiz@hospital.example"
+      phone: "+86 139-1000-1200"
+
+  locations:
+    home:
+      address: "Beijing Haidian Apartment"
+      label: "Home"
+    work:
+      address: "Haidian General Hospital Emergency Department"
+      label: "ER"
+
+  digital_context:
+    devices:
+      - "Android Phone"
+      - "Hospital Tablet"
+    system_settings:
+      language: "English (US)"
+      theme: "Dark Mode at night"
+      time_zone: "Asia/Shanghai"
+
+  habits:
+    low_battery_saver:
+      description: "Enables power saving mode when battery is low so urgent hospital calls are not missed."
+      trigger:
+        condition: "Battery level <= 15%"
+        context_cue: "Phone must stay reachable during shift"
+      action:
+        type: "change_settings"
+        settings: ["power_saving_mode"]
+
+    night_eye_care:
+      description: "Enables Dark Mode during overnight emergency shifts."
+      trigger:
+        time_range: ["00:00", "05:00"]
+        context_cue: "Overnight shift phone use"
+        simulation_datetime: "2026-02-12 02:20:00"
+      action:
+        type: "change_settings"
+        settings: ["dark_theme"]
+
+    on_call_response:
+      description: "Acknowledges critical overnight triage alerts immediately in the hospital team channel."
+      trigger:
+        simulation_datetime: "2026-02-15 02:10:00"
+        app: "Mattermost"
+        team: "hospital_ops"
+        channel: "ER-Triage"
+        alert_message: "CRITICAL: Trauma team activation. Immediate acknowledgement required."
+      action:
+        type: "send_message"
+        reply_keywords: ["ack", "received", "on my way"]
+
+  preferences:
+    apps:
+      mattermost:
+        preferred_channel: "ER-Triage"
+        notification_style: "Only critical medical alerts bypass quiet hours."
+      browser: "Chrome"
+    social:
+      communication_style:
+        format: "Very brief status messages."
+
+  decision_criteria:
+    priorities: ["Patient safety", "Reachability", "Low interruption"]
+
+  social_graph:
+    high_priority:
+      - name: "Charge Nurse"
+        role: "Shift Coordinator"
+        app_preference: "Mattermost"
+
+environment_init_state: {}

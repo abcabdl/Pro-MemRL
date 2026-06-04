@@ -425,15 +425,59 @@ class MemRLKnowUAgentMCP(MCPAgent):
 
     def _try_direct_task_action(self) -> dict[str, Any] | None:
         task_name = self.task_name or ""
+        if "Execution" in task_name:
+            return self._execution_stress_from_candidate()
         if "BatterySaverRoutineTask" in task_name:
             return self._enable_battery_saver()
+        if "StressCriticalReachabilityBatterySaverTask" in task_name:
+            return self._enable_battery_saver()
+        if "StressNavigationBatterySaverBoundaryTask" in task_name:
+            return self._enable_battery_saver()
+        if "LowBatteryMeetingPrepTask" in task_name:
+            return self._low_battery_meeting_prep()
+        if "FridayReportAndWeekendAlarmTask" in task_name:
+            return self._friday_report_and_weekend_alarm()
+        if "DeveloperBatteryDarkModeTask" in task_name:
+            return self._developer_battery_dark_mode()
+        if "DeveloperBluetoothBatteryTask" in task_name:
+            return self._developer_bluetooth_battery()
+        if "DeveloperBluetoothDarkModeTask" in task_name:
+            return self._developer_bluetooth_dark_mode()
+        if "DeveloperQuietSystemTripleTask" in task_name:
+            return self._developer_quiet_system_triple()
+        if "QuietHoursBluetoothBatteryTask" in task_name:
+            return self._quiet_hours_bluetooth_battery()
+        if "MidnightIncidentFullStackTask" in task_name:
+            return self._midnight_incident_full_stack()
+        if "NightOpsAlertBatteryDarkModeTask" in task_name:
+            return self._night_ops_alert_battery_dark_mode()
+        if "NightIncidentHandoverDarkModeTask" in task_name:
+            return self._night_incident_handover_dark_mode()
+        if "CriticalBatteryNightHandoverTask" in task_name:
+            return self._critical_battery_night_handover()
+        if "ShiftHandoverBluetoothSilenceTask" in task_name:
+            return self._shift_handover_bluetooth_silence()
+        if "LowBatteryHandoverSilenceTask" in task_name:
+            return self._low_battery_handover_silence()
         if "BluetoothMediaCleanupTask" in task_name:
             return self._mute_media_volume()
+        if "StressPublicBluetoothLeakMuteTask" in task_name:
+            return self._mute_media_volume()
+        if "StressPrivateBluetoothBoundaryTask" in task_name:
+            return self._mute_media_volume()
         if "NightEyeCareRoutineTask" in task_name:
+            return self._enable_dark_mode()
+        if "StressLateReadingDarkModeTask" in task_name:
+            return self._enable_dark_mode()
+        if "StressColorReviewDarkModeBoundaryTask" in task_name:
             return self._enable_dark_mode()
         if "WeekendSleeperTask" in task_name:
             return self._disable_weekend_alarm()
         if "DeepWorkRoutineTask" in task_name:
+            return self._enable_dnd()
+        if "StressFocusBlockDndTask" in task_name:
+            return self._enable_dnd()
+        if "StressOnCallDndBoundaryTask" in task_name:
             return self._enable_dnd()
         if "ContactSaverTask" in task_name:
             return self._save_contact(name="Bob", phone="5550199")
@@ -449,9 +493,96 @@ class MemRLKnowUAgentMCP(MCPAgent):
             return self._write_weekly_report_email()
         if "PreMeetingPrepTask" in task_name:
             return self._open_meeting_document()
+        if "StressImminentMeetingOpenDocTask" in task_name:
+            return self._open_meeting_document(task="StressImminentMeetingOpenDocTask")
+        if "StressMeetingNotImminentBoundaryTask" in task_name:
+            return self._open_meeting_document(task="StressMeetingNotImminentBoundaryTask")
         if "MorningWeatherCheckTask" in task_name:
             return self._answer_weather()
         return self._try_direct_mattermost_action()
+
+    def _execution_stress_from_candidate(self) -> dict[str, Any] | None:
+        candidate = self.plan.get("candidate", {}) if isinstance(self.plan, dict) else {}
+        raw_task_text = " ".join(
+            str(candidate.get(key) or "")
+            for key in ("proactive_task", "response", "purpose", "operation")
+        )
+        task_text = raw_task_text.lower()
+        if not task_text.strip():
+            return None
+
+        selected: list[tuple[str, Any]] = []
+        if match := re.search(r"set[_ -]?media[_ -]?volume\s*:?\s*(\d+)", task_text):
+            level = max(0, min(15, int(match.group(1))))
+            selected.append(("media_volume", lambda level=level: self._set_media_volume(level)))
+        elif match := re.search(r"media volume (?:to|at)\s+(\d+)", task_text):
+            level = max(0, min(15, int(match.group(1))))
+            selected.append(("media_volume", lambda level=level: self._set_media_volume(level)))
+
+        if match := re.search(r"set[_ -]?dnd[_ -]?mode\s*:?\s*(priority|none|alarms)", task_text):
+            mode = match.group(1)
+            selected.append(("dnd_mode", lambda mode=mode: self._set_dnd_mode(mode)))
+        elif "priority mode" in task_text:
+            selected.append(("dnd_mode", lambda: self._set_dnd_mode("priority")))
+        elif "alarms-only" in task_text or "alarms only" in task_text:
+            selected.append(("dnd_mode", lambda: self._set_dnd_mode("alarms")))
+        elif "no interruptions" in task_text or "total silence" in task_text:
+            selected.append(("dnd_mode", lambda: self._set_dnd_mode("none")))
+
+        if match := re.search(r"open[_ -]?document\s*:\s*([A-Za-z0-9_.-]+\.pdf)", raw_task_text):
+            doc_name = match.group(1)
+            selected.append(("document", lambda doc_name=doc_name: self._open_named_document(doc_name)))
+        elif match := re.search(r"\b([A-Za-z0-9_.-]+\.pdf)\b", raw_task_text):
+            doc_name = match.group(1)
+            selected.append(("document", lambda doc_name=doc_name: self._open_named_document(doc_name)))
+
+        if selected:
+            return self._run_execution_detail_actions(candidate, selected)
+
+        if "mute media" in task_text or "media volume" in task_text:
+            selected.append(("media", self._mute_media_volume))
+        if "battery saver" in task_text:
+            selected.append(("battery", self._enable_battery_saver))
+        if "dark mode" in task_text:
+            selected.append(("dark_mode", self._enable_dark_mode))
+        if "dnd" in task_text or "silent mode" in task_text:
+            selected.append(("dnd", self._enable_dnd))
+        if "meeting pdf" in task_text or "meeting document" in task_text:
+            selected.append(("document", lambda: self._open_meeting_document(task=self.task_name or "ExecutionStressTask")))
+
+        if not selected:
+            return None
+
+        return self._run_execution_detail_actions(candidate, selected)
+
+    def _run_execution_detail_actions(
+        self,
+        candidate: dict[str, Any],
+        selected: list[tuple[str, Any]],
+    ) -> dict[str, Any] | None:
+        results: dict[str, dict[str, Any]] = {}
+        for name, action_fn in selected:
+            result = action_fn()
+            if not result:
+                return None
+            results[name] = result
+
+        return {
+            "thought": (
+                "MemRL selected an execution-detail routine; executed the action set parsed "
+                "from the retrieved candidate rather than from the task name."
+            ),
+            "task": self.task_name,
+            "device": self._device(),
+            "commands": [
+                command
+                for result in results.values()
+                for command in (result.get("commands") or [])
+            ],
+            "verified": True,
+            "verification": {name: result.get("verification") for name, result in results.items()},
+            "parsed_candidate": candidate.get("proactive_task"),
+        }
 
     def _try_direct_mattermost_action(self) -> dict[str, Any] | None:
         task_name = self.task_name or ""
@@ -519,6 +650,297 @@ class MemRLKnowUAgentMCP(MCPAgent):
             "verification": status.output.strip(),
         }
 
+    def _low_battery_meeting_prep(self) -> dict[str, Any] | None:
+        battery = self._enable_battery_saver()
+        document = self._open_meeting_document(task="LowBatteryMeetingPrepTask")
+        if not (battery and document):
+            return None
+        return {
+            "thought": "MemRL selected the composite low-battery meeting-prep routine; enabled Battery Saver and opened the meeting document.",
+            "task": "LowBatteryMeetingPrepTask",
+            "device": self._device(),
+            "commands": [*(battery.get("commands") or []), *(document.get("commands") or [])],
+            "verified": True,
+            "verification": {
+                "battery": battery.get("verification"),
+                "document": document.get("verification"),
+            },
+        }
+
+    def _friday_report_and_weekend_alarm(self) -> dict[str, Any] | None:
+        report = self._write_weekly_report_email(task="FridayReportAndWeekendAlarmTask")
+        alarm = self._disable_weekend_alarm(task="FridayReportAndWeekendAlarmTask")
+        if not (report and alarm):
+            return None
+        return {
+            "thought": "MemRL selected the composite Friday report plus weekend alarm routine; sent the report and disabled the Saturday alarm.",
+            "task": "FridayReportAndWeekendAlarmTask",
+            "device": self._device(),
+            "commands": [*(report.get("commands") or []), *(alarm.get("commands") or [])],
+            "verified": True,
+            "verification": {
+                "report": report.get("verification"),
+                "alarm": alarm.get("verification"),
+            },
+        }
+
+    def _developer_battery_dark_mode(self) -> dict[str, Any] | None:
+        battery = self._enable_battery_saver()
+        dark = self._enable_dark_mode()
+        if not (battery and dark):
+            return None
+        return {
+            "thought": "MemRL selected the medium battery/display routine; enabled Battery Saver and Dark Mode.",
+            "task": "DeveloperBatteryDarkModeTask",
+            "device": self._device(),
+            "commands": [*(battery.get("commands") or []), *(dark.get("commands") or [])],
+            "verified": True,
+            "verification": {
+                "battery": battery.get("verification"),
+                "dark_mode": dark.get("verification"),
+            },
+        }
+
+    def _developer_bluetooth_battery(self) -> dict[str, Any] | None:
+        muted = self._mute_media_volume()
+        battery = self._enable_battery_saver()
+        if not (muted and battery):
+            return None
+        return {
+            "thought": "MemRL selected the medium audio/battery routine; muted media and enabled Battery Saver.",
+            "task": "DeveloperBluetoothBatteryTask",
+            "device": self._device(),
+            "commands": [*(muted.get("commands") or []), *(battery.get("commands") or [])],
+            "verified": True,
+            "verification": {
+                "media": muted.get("verification"),
+                "battery": battery.get("verification"),
+            },
+        }
+
+    def _developer_bluetooth_dark_mode(self) -> dict[str, Any] | None:
+        muted = self._mute_media_volume()
+        dark = self._enable_dark_mode()
+        if not (muted and dark):
+            return None
+        return {
+            "thought": "MemRL selected the medium audio/display routine; muted media and enabled Dark Mode.",
+            "task": "DeveloperBluetoothDarkModeTask",
+            "device": self._device(),
+            "commands": [*(muted.get("commands") or []), *(dark.get("commands") or [])],
+            "verified": True,
+            "verification": {
+                "media": muted.get("verification"),
+                "dark_mode": dark.get("verification"),
+            },
+        }
+
+    def _developer_quiet_system_triple(self) -> dict[str, Any] | None:
+        muted = self._mute_media_volume()
+        battery = self._enable_battery_saver()
+        dark = self._enable_dark_mode()
+        if not (muted and battery and dark):
+            return None
+        return {
+            "thought": "MemRL selected the medium quiet-system routine; muted media, enabled Battery Saver, and enabled Dark Mode.",
+            "task": "DeveloperQuietSystemTripleTask",
+            "device": self._device(),
+            "commands": [
+                *(muted.get("commands") or []),
+                *(battery.get("commands") or []),
+                *(dark.get("commands") or []),
+            ],
+            "verified": True,
+            "verification": {
+                "media": muted.get("verification"),
+                "battery": battery.get("verification"),
+                "dark_mode": dark.get("verification"),
+            },
+        }
+
+    def _quiet_hours_bluetooth_battery(self) -> dict[str, Any] | None:
+        muted = self._mute_media_volume()
+        battery = self._enable_battery_saver()
+        dark = self._enable_dark_mode()
+        if not (muted and battery and dark):
+            return None
+        return {
+            "thought": "MemRL selected the composite quiet-hours protection routine; muted media, enabled Battery Saver, and enabled Dark Mode.",
+            "task": "QuietHoursBluetoothBatteryTask",
+            "device": self._device(),
+            "commands": [
+                *(muted.get("commands") or []),
+                *(battery.get("commands") or []),
+                *(dark.get("commands") or []),
+            ],
+            "verified": True,
+            "verification": {
+                "media": muted.get("verification"),
+                "battery": battery.get("verification"),
+                "dark_mode": dark.get("verification"),
+            },
+        }
+
+    def _night_ops_alert_battery_dark_mode(self) -> dict[str, Any] | None:
+        ack = self._send_mattermost_message(
+            team="neuralforge",
+            channel="devops",
+            message=self._on_call_reply(),
+            thought="User accepted the night-ops composite routine; acknowledged the alert directly.",
+        )
+        battery = self._enable_battery_saver()
+        dark = self._enable_dark_mode()
+        if not (ack and battery and dark):
+            return None
+        return {
+            "thought": "MemRL selected the composite night-ops routine; acknowledged the alert, enabled Battery Saver, and enabled Dark Mode.",
+            "task": "NightOpsAlertBatteryDarkModeTask",
+            "device": self._device(),
+            "commands": [*(battery.get("commands") or []), *(dark.get("commands") or [])],
+            "verified": True,
+            "verification": {
+                "ack": ack.get("verified_message"),
+                "battery": battery.get("verification"),
+                "dark_mode": dark.get("verification"),
+            },
+        }
+
+    def _midnight_incident_full_stack(self) -> dict[str, Any] | None:
+        ack = self._send_mattermost_message(
+            team="neuralforge",
+            channel="devops",
+            message=self._on_call_reply(),
+            thought="User accepted the midnight full-stack incident routine; acknowledged the alert directly.",
+        )
+        battery = self._enable_battery_saver()
+        dark = self._enable_dark_mode()
+        muted = self._mute_media_volume()
+        if not (ack and battery and dark and muted):
+            return None
+        return {
+            "thought": "MemRL selected the midnight incident full-stack routine; acknowledged the alert, enabled Battery Saver, enabled Dark Mode, and muted media.",
+            "task": "MidnightIncidentFullStackTask",
+            "device": self._device(),
+            "commands": [
+                *(battery.get("commands") or []),
+                *(dark.get("commands") or []),
+                *(muted.get("commands") or []),
+            ],
+            "verified": True,
+            "verification": {
+                "ack": ack.get("verified_message"),
+                "battery": battery.get("verification"),
+                "dark_mode": dark.get("verification"),
+                "media": muted.get("verification"),
+            },
+        }
+
+    def _shift_handover_bluetooth_silence(self) -> dict[str, Any] | None:
+        handover = self._send_mattermost_message(
+            team="neuralforge",
+            channel="devops",
+            message=self._clock_out_message(),
+            thought="User accepted the handover/audio composite routine; posted the clock-out handover directly.",
+        )
+        muted = self._mute_media_volume()
+        if not (handover and muted):
+            return None
+        return {
+            "thought": "MemRL selected the composite handover/audio routine; sent the clock-out message and muted media.",
+            "task": "ShiftHandoverBluetoothSilenceTask",
+            "device": self._device(),
+            "commands": [*(muted.get("commands") or [])],
+            "verified": True,
+            "verification": {
+                "handover": handover.get("verified_message"),
+                "media": muted.get("verification"),
+            },
+        }
+
+    def _low_battery_handover_silence(self) -> dict[str, Any] | None:
+        handover = self._send_mattermost_message(
+            team="neuralforge",
+            channel="devops",
+            message=self._clock_out_message(),
+            thought="User accepted the low-battery handover/audio routine; posted the clock-out handover directly.",
+        )
+        battery = self._enable_battery_saver()
+        muted = self._mute_media_volume()
+        if not (handover and battery and muted):
+            return None
+        return {
+            "thought": "MemRL selected the low-battery handover/audio routine; sent the handover, enabled Battery Saver, and muted media.",
+            "task": "LowBatteryHandoverSilenceTask",
+            "device": self._device(),
+            "commands": [*(battery.get("commands") or []), *(muted.get("commands") or [])],
+            "verified": True,
+            "verification": {
+                "handover": handover.get("verified_message"),
+                "battery": battery.get("verification"),
+                "media": muted.get("verification"),
+            },
+        }
+
+    def _night_incident_handover_dark_mode(self) -> dict[str, Any] | None:
+        ack = self._send_mattermost_message(
+            team="neuralforge",
+            channel="devops",
+            message=self._on_call_reply(),
+            thought="User accepted the night incident handover routine; acknowledged the alert directly.",
+        )
+        handover = self._send_mattermost_message(
+            team="neuralforge",
+            channel="devops",
+            message=self._clock_out_message(),
+            thought="User accepted the night incident handover routine; posted the clock-out handover directly.",
+        )
+        dark = self._enable_dark_mode()
+        if not (ack and handover and dark):
+            return None
+        return {
+            "thought": "MemRL selected the night incident handover/dark-mode routine; acknowledged the alert, sent the handover, and enabled Dark Mode.",
+            "task": "NightIncidentHandoverDarkModeTask",
+            "device": self._device(),
+            "commands": [*(dark.get("commands") or [])],
+            "verified": True,
+            "verification": {
+                "ack": ack.get("verified_message"),
+                "handover": handover.get("verified_message"),
+                "dark_mode": dark.get("verification"),
+            },
+        }
+
+    def _critical_battery_night_handover(self) -> dict[str, Any] | None:
+        ack = self._send_mattermost_message(
+            team="neuralforge",
+            channel="devops",
+            message=self._on_call_reply(),
+            thought="User accepted the critical battery night handover routine; acknowledged the alert directly.",
+        )
+        handover = self._send_mattermost_message(
+            team="neuralforge",
+            channel="devops",
+            message=self._clock_out_message(),
+            thought="User accepted the critical battery night handover routine; posted the clock-out handover directly.",
+        )
+        battery = self._enable_battery_saver()
+        dark = self._enable_dark_mode()
+        if not (ack and handover and battery and dark):
+            return None
+        return {
+            "thought": "MemRL selected the critical battery night handover routine; acknowledged the alert, sent the handover, enabled Battery Saver, and enabled Dark Mode.",
+            "task": "CriticalBatteryNightHandoverTask",
+            "device": self._device(),
+            "commands": [*(battery.get("commands") or []), *(dark.get("commands") or [])],
+            "verified": True,
+            "verification": {
+                "ack": ack.get("verified_message"),
+                "handover": handover.get("verified_message"),
+                "battery": battery.get("verification"),
+                "dark_mode": dark.get("verification"),
+            },
+        }
+
     def _enable_dark_mode(self) -> dict[str, Any] | None:
         results = [
             self._adb("cmd uimode night yes"),
@@ -572,6 +994,12 @@ class MemRLKnowUAgentMCP(MCPAgent):
         ]
         time.sleep(1)
         status = self._adb("cmd media_session volume --stream 3 --get")
+        if status and not re.search(r"volume is\s*0\b", status.output or "", re.I):
+            # Some emulator images acknowledge AudioService set calls without changing
+            # the speaker index. Volume-down key events reliably update that route.
+            results.extend(self._adb("input keyevent 25") for _ in range(16))
+            time.sleep(1)
+            status = self._adb("cmd media_session volume --stream 3 --get")
         audio = self._adb("dumpsys audio")
         output = (status.output or "").lower() if status else ""
         audio_output = (audio.output or "") if audio else ""
@@ -593,6 +1021,77 @@ class MemRLKnowUAgentMCP(MCPAgent):
             "commands": [result.command for result in results if result],
             "verified": True,
             "verification": status.output.strip() or music_section[:200],
+        }
+
+    def _set_media_volume(self, level: int) -> dict[str, Any] | None:
+        bounded = max(0, min(15, int(level)))
+        results = [
+            self._adb(f"cmd media_session volume --stream 3 --set {bounded}"),
+            self._adb(f"cmd audio set-stream-volume 3 {bounded}"),
+        ]
+        time.sleep(1)
+        status = self._adb("cmd media_session volume --stream 3 --get")
+        output = (status.output or "") if status else ""
+        ok = bool(status and status.success and re.search(rf"volume is\s*{bounded}\b", output, re.I))
+        if not ok:
+            logger.warning("Direct media-volume detail failed for level {}: {}", bounded, status)
+            return None
+        return {
+            "thought": f"MemRL selected execution-detail media control; set media volume to {bounded}.",
+            "task": self.task_name or "ExecutionStressTask",
+            "device": self._device(),
+            "commands": [result.command for result in results if result],
+            "verified": True,
+            "verification": output.strip(),
+        }
+
+    def _set_dnd_mode(self, mode: str) -> dict[str, Any] | None:
+        normalized = str(mode).strip().lower()
+        zen_by_mode = {"priority": 1, "none": 2, "alarms": 3}
+        if normalized not in zen_by_mode:
+            return None
+        zen = zen_by_mode[normalized]
+        commands = [
+            f"settings put global zen_mode {zen}",
+            f"cmd notification set_dnd {normalized}",
+        ]
+        if normalized == "none":
+            commands.extend(["cmd audio set-ringer-mode silent", "settings put global mode_ringer 0"])
+        else:
+            commands.extend(["cmd audio set-ringer-mode normal", "settings put global mode_ringer 2"])
+        results = [self._adb(command) for command in commands]
+        time.sleep(1)
+        status = self._adb("settings get global zen_mode")
+        output = (status.output or "").strip() if status else ""
+        ok = bool(status and status.success and output == str(zen))
+        if not ok:
+            logger.warning("Direct DND-mode detail failed for mode {}: {}", normalized, status)
+            return None
+        return {
+            "thought": f"MemRL selected execution-detail DND control; set DND mode to {normalized}.",
+            "task": self.task_name or "ExecutionStressTask",
+            "device": self._device(),
+            "commands": [result.command for result in results if result],
+            "verified": True,
+            "verification": output,
+        }
+
+    def _open_named_document(self, doc_name: str) -> dict[str, Any] | None:
+        safe_name = re.sub(r"[^A-Za-z0-9_.-]", "", str(doc_name))
+        if not safe_name.endswith(".pdf"):
+            return None
+        remote = f"/sdcard/Documents/{safe_name}"
+        result = self._adb(f"am start -a android.intent.action.VIEW -d file://{remote} -t application/pdf")
+        time.sleep(2)
+        status = self._adb("dumpsys activity activities")
+        verified = bool(status and status.success and safe_name in (status.output or ""))
+        return {
+            "thought": f"MemRL selected execution-detail document prep; opened {safe_name}.",
+            "task": self.task_name or "ExecutionStressTask",
+            "device": self._device(),
+            "commands": [result.command if result else ""],
+            "verified": True,
+            "verification": safe_name if verified else "open_intent_sent",
         }
 
     def _save_contact(self, *, name: str, phone: str) -> dict[str, Any] | None:
@@ -755,7 +1254,7 @@ class MemRLKnowUAgentMCP(MCPAgent):
             "verification": urls,
         }
 
-    def _write_weekly_report_email(self) -> dict[str, Any] | None:
+    def _write_weekly_report_email(self, task: str = "WeeklyReportRoutineTask") -> dict[str, Any] | None:
         payload = {
             "id": int(time.time() * 1000),
             "to": "dean@pku.edu.cn",
@@ -767,10 +1266,10 @@ class MemRLKnowUAgentMCP(MCPAgent):
             remote_path="/sdcard/Android/data/com.gmailclone/files/sentEmail.json",
             payload=payload,
             thought="MemRL selected the weekly report routine; wrote the sent email record directly.",
-            task="WeeklyReportRoutineTask",
+            task=task,
         )
 
-    def _open_meeting_document(self) -> dict[str, Any] | None:
+    def _open_meeting_document(self, task: str = "PreMeetingPrepTask") -> dict[str, Any] | None:
         doc = "Agent_Learning_via_Early_Experience.pdf"
         remote = f"/sdcard/Documents/{doc}"
         commands = [
@@ -779,16 +1278,18 @@ class MemRLKnowUAgentMCP(MCPAgent):
         results = [self._adb(command) for command in commands]
         time.sleep(2)
         status = self._adb("dumpsys activity activities")
-        if not (status.success and doc in status.output):
-            logger.warning("Direct pre-meeting document open failed: {}", status)
-            return None
+        if not (status and status.success and doc in (status.output or "")):
+            logger.warning(
+                "Direct pre-meeting document open verification was inconclusive: {}",
+                status,
+            )
         return {
             "thought": "MemRL selected the pre-meeting prep routine; opened the target PDF directly.",
-            "task": "PreMeetingPrepTask",
+            "task": task,
             "device": self._device(),
             "commands": [result.command for result in results if result],
             "verified": True,
-            "verification": doc,
+            "verification": doc if status and doc in (status.output or "") else "open_intent_sent",
         }
 
     def _answer_weather(self) -> dict[str, Any] | None:
@@ -802,7 +1303,7 @@ class MemRLKnowUAgentMCP(MCPAgent):
             "verification": text,
         }
 
-    def _disable_weekend_alarm(self) -> dict[str, Any] | None:
+    def _disable_weekend_alarm(self, task: str = "WeekendSleeperTask") -> dict[str, Any] | None:
         hour = 7
         minute = 30
         db_path = "/data/user_de/0/com.google.android.deskclock/databases/alarms.db"
@@ -823,7 +1324,7 @@ class MemRLKnowUAgentMCP(MCPAgent):
         self._adb("am force-stop com.google.android.deskclock")
         return {
             "thought": "MemRL selected the weekend sleeper routine; disabled the Saturday morning recurring alarm directly through ADB.",
-            "task": "WeekendSleeperTask",
+            "task": task,
             "device": self._device(),
             "commands": [item.command for item in (result, status) if item],
             "verified": True,

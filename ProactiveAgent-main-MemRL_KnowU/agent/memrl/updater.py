@@ -10,7 +10,7 @@ def utc_now() -> str:
 def update_q_value(memory: dict, reward: float, *, alpha: float = 0.12) -> dict:
     old_q = float(memory.get("q_value", memory.get("reward", 0.0)) or 0.0)
     new_q = (1.0 - alpha) * old_q + alpha * float(reward)
-    memory["q_value"] = new_q
+    memory["q_value"] = max(new_q, 0.0)
     memory["reward"] = float(reward)
     memory["q_visits"] = int(memory.get("q_visits", 0) or 0) + 1
     memory["updated_at"] = utc_now()

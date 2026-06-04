@@ -264,7 +264,7 @@ async def execute(args: argparse.Namespace) -> None:
     else:
         final_tasks = args.task.split(",") if args.task else []
 
-    start_time = time.time() if run_all_tasks else None
+    start_time = time.time()
 
     # Parse aw_host URLs - if None, will auto-discover; if provided, split by comma
     aw_urls = None if args.aw_host is None else args.aw_host.split(",")
@@ -304,7 +304,7 @@ async def execute(args: argparse.Namespace) -> None:
         user_log_source=args.user_log_source,
         memrl_use_memory=args.memrl_use_memory,
     )
-    if run_all_tasks and task_results:
+    if task_results or task_list_with_no_results:
         total_duration = time.time() - start_time
 
         total_tasks = len(task_results)
@@ -337,7 +337,7 @@ async def execute(args: argparse.Namespace) -> None:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         report_file = output_path / f"eval_report_{timestamp}.json"
 
-        with open(report_file, "w") as f:
+        with open(report_file, "w", encoding="utf-8") as f:
             json.dump(report, f, indent=2, ensure_ascii=False)
 
         # Pretty print results using Rich
@@ -354,7 +354,7 @@ async def execute(args: argparse.Namespace) -> None:
 
         summary_panel = Panel(
             summary_text,
-            title="[bold blue]📊 Evaluation Summary",
+            title="[bold blue]Evaluation Summary",
             border_style="blue",
             padding=(1, 2),
         )
@@ -363,7 +363,7 @@ async def execute(args: argparse.Namespace) -> None:
 
         # Create detailed stats table
         stats_table = Table(
-            title="[bold]📈 Detailed Statistics", show_header=True, header_style="bold blue"
+            title="[bold]Detailed Statistics", show_header=True, header_style="bold blue"
         )
         stats_table.add_column("Metric", style="cyan", width=25)
         stats_table.add_column("Value", style="magenta", justify="right")
@@ -388,7 +388,7 @@ async def execute(args: argparse.Namespace) -> None:
         metadata_text.append(f"Log Root: {report['metadata']['log_file_root']}\n", style="green")
 
         metadata_panel = Panel(
-            metadata_text, title="[bold]🔧 Configuration", border_style="green", padding=(1, 2)
+            metadata_text, title="[bold]Configuration", border_style="green", padding=(1, 2)
         )
 
         console.print(metadata_panel)
@@ -396,14 +396,14 @@ async def execute(args: argparse.Namespace) -> None:
         # Show task results if available
         if task_results:
             results_table = Table(
-                title="[bold]📋 Task Results", show_header=True, header_style="bold magenta"
+                title="[bold]Task Results", show_header=True, header_style="bold magenta"
             )
             results_table.add_column("Task", style="cyan", width=30)
             results_table.add_column("Score", style="green", justify="center")
             results_table.add_column("Status", style="yellow", justify="center")
 
             for result in task_results:
-                status = "✅ Success" if result["score"] > 0.99 else "❌ Failed"
+                status = "Success" if result["score"] > 0.99 else "Failed"
                 status_style = "green" if result["score"] > 0.99 else "red"
                 results_table.add_row(
                     result.get("task_name", "Unknown"),
@@ -418,7 +418,7 @@ async def execute(args: argparse.Namespace) -> None:
             no_results_text = Text()
             no_results_text.append("Tasks with no results:\n", style="bold red")
             for task in task_list_with_no_results[:5]:  # Show first 5
-                no_results_text.append(f"• {task}\n", style="red")
+                no_results_text.append(f"- {task}\n", style="red")
             if len(task_list_with_no_results) > 5:
                 no_results_text.append(
                     f"... and {len(task_list_with_no_results) - 5} more", style="red"
@@ -426,7 +426,7 @@ async def execute(args: argparse.Namespace) -> None:
 
             no_results_panel = Panel(
                 no_results_text,
-                title="[bold red]⚠️  Tasks with No Results",
+                title="[bold red]Tasks with No Results",
                 border_style="red",
                 padding=(1, 2),
             )
@@ -438,7 +438,7 @@ async def execute(args: argparse.Namespace) -> None:
         files_text.append(f"Trajectory Logs: {log_file_root}", style="blue")
 
         files_panel = Panel(
-            files_text, title="[bold]💾 Output Files", border_style="cyan", padding=(1, 2)
+            files_text, title="[bold]Output Files", border_style="cyan", padding=(1, 2)
         )
 
         console.print(files_panel)

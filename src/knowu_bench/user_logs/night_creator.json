@@ -1,0 +1,26 @@
+[
+  {
+    "time": "2026-01-10T23:35:00",
+    "location": "Studio",
+    "category": "routine",
+    "action": "While editing a podcast late at night, he enabled Dark Mode before reviewing client notes on the phone."
+  },
+  {
+    "time": "2026-01-11T00:20:00",
+    "location": "Recording Room",
+    "category": "routine",
+    "action": "Headphones disconnected during audio playback. He muted media volume immediately before continuing the edit."
+  },
+  {
+    "time": "2026-01-12T01:10:00",
+    "location": "Studio",
+    "category": "routine",
+    "action": "Battery reached 15% while the phone was being used as a backup hotspot. He enabled Battery Saver before uploading a draft."
+  },
+  {
+    "time": "2026-01-13T22:45:00",
+    "location": "Studio",
+    "category": "background",
+    "action": "He dismissed a non-urgent client meme notification and kept editing audio."
+  }
+]

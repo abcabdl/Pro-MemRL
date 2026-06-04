@@ -1,0 +1,81 @@
+version: "1.0"
+description: "Synthetic source profile: night audio creator with system-setting routines."
+created_at: "2026-06-01T00:00:00Z"
+
+user_profile:
+  identity:
+    full_name: "Jonas Miller"
+    nickname: "jonas-night"
+    age: 27
+    occupation: "Freelance Podcast Editor"
+    employer: "Self-employed"
+    contact_info:
+      email_work: "jonas.audio@example.com"
+      phone: "+86 139-1000-5600"
+
+  locations:
+    home:
+      address: "Hangzhou studio apartment"
+      label: "Studio"
+    work:
+      address: "Shared recording room"
+      label: "Recording Room"
+
+  digital_context:
+    devices:
+      - "Android Phone"
+      - "Audio Workstation"
+    system_settings:
+      language: "English (US)"
+      theme: "Dark Mode preferred at night"
+      time_zone: "Asia/Shanghai"
+
+  habits:
+    bluetooth_cleanup:
+      description: "Mutes media volume immediately when headphones disconnect during editing."
+      trigger:
+        condition: "Bluetooth disconnected"
+        context_cue: "Audio playback may leak into the room"
+      action:
+        type: "change_settings"
+        settings: ["mute_media_volume"]
+
+    night_eye_care:
+      description: "Enables Dark Mode during late-night editing sessions."
+      trigger:
+        time_range: ["23:00", "03:30"]
+        context_cue: "Late-night editing on phone"
+        simulation_datetime: "2026-02-12 23:40:00"
+      action:
+        type: "change_settings"
+        settings: ["dark_theme"]
+
+    low_battery_saver:
+      description: "Enables Battery Saver when phone battery is low before uploading drafts."
+      trigger:
+        condition: "Battery level <= 15%"
+        context_cue: "Phone used as backup network hotspot"
+      action:
+        type: "change_settings"
+        settings: ["power_saving_mode"]
+
+  preferences:
+    apps:
+      browser: "Chrome"
+      messaging:
+        primary: "Mattermost for client rooms only"
+      audio: "Headphones required during playback"
+    social:
+      communication_style:
+        format: "Short informal notes."
+
+  decision_criteria:
+    priorities: ["Audio privacy", "Eye comfort", "Battery continuity"]
+
+  social_graph:
+    routine:
+      - name: "Podcast Client"
+        role: "Review Contact"
+        app_preference: "Mattermost"
+
+environment_init_state: {}

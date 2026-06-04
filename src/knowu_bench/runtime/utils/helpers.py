@@ -388,7 +388,7 @@ def execute_adb(adb_command: str, output: bool = True, root_required=False) -> A
     if result.returncode == 0:
         return AdbResponse(
             success=True,
-            output=result.stdout.strip(),
+            output=(result.stdout or "").strip(),
             return_code=result.returncode,
             command=adb_command,
         )

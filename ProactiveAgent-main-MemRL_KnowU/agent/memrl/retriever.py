@@ -90,7 +90,9 @@ def _evidence_side(memory: dict[str, Any]) -> str | None:
     return "abstain" if q_value > 0.0 else "intervene"
 
 
-_PROFILE_RE = re.compile(r"(developer|student|grandma|user)")
+_PROFILE_RE = re.compile(
+    r"(developer|student|grandma|user|emergency_doctor|field_consultant|night_creator)"
+)
 
 
 def _memory_profile(memory: dict[str, Any]) -> str | None:
@@ -119,7 +121,10 @@ def _memory_task_family(memory: dict[str, Any]) -> str | None:
 
 
 def _target_profile(query: str) -> str | None:
-    match = re.search(r"\bprofile:(developer|student|grandma|user)\b", query)
+    match = re.search(
+        r"\bprofile:(developer|student|grandma|user|emergency_doctor|field_consultant|night_creator)\b",
+        query,
+    )
     return match.group(1) if match else None
 
 
@@ -135,6 +140,153 @@ def _target_task_family(query: str) -> str | None:
     return None
 
 
+_COLD_START_TRANSFER_SOURCE_FAMILIES: dict[str, set[str]] = {
+    "execution_battery_dark_late_doc": {
+        "stress_critical_reachability_battery_saver",
+        "stress_late_reading_dark_mode",
+        "battery_saver",
+        "night_eye_care",
+    },
+    "execution_battery_only_reachable_night": {
+        "stress_critical_reachability_battery_saver",
+        "stress_on_call_dnd_boundary",
+        "battery_saver",
+        "mattermost_response",
+    },
+    "execution_mute_only_public_demo": {
+        "stress_public_bluetooth_leak_mute",
+        "bluetooth_cleanup",
+    },
+    "execution_mute_battery_commute": {
+        "stress_public_bluetooth_leak_mute",
+        "stress_critical_reachability_battery_saver",
+        "stress_navigation_battery_saver_boundary",
+        "bluetooth_cleanup",
+        "battery_saver",
+    },
+    "execution_dark_only_bed_reading": {
+        "stress_late_reading_dark_mode",
+        "stress_color_review_dark_mode_boundary",
+        "night_eye_care",
+    },
+    "execution_dark_dnd_focus_writing": {
+        "stress_late_reading_dark_mode",
+        "stress_focus_block_dnd",
+        "night_eye_care",
+        "deep_work",
+    },
+    "execution_dnd_only_day_focus": {
+        "stress_focus_block_dnd",
+        "stress_on_call_dnd_boundary",
+        "deep_work",
+    },
+    "execution_doc_only_imminent_review": {
+        "stress_imminent_meeting_open_doc",
+        "stress_meeting_not_imminent_boundary",
+        "pre_meeting_prep",
+    },
+    "execution_battery_doc_low_power_meeting": {
+        "stress_critical_reachability_battery_saver",
+        "stress_imminent_meeting_open_doc",
+        "battery_saver",
+        "pre_meeting_prep",
+    },
+    "execution_mute_doc_public_review": {
+        "stress_public_bluetooth_leak_mute",
+        "stress_imminent_meeting_open_doc",
+        "bluetooth_cleanup",
+        "pre_meeting_prep",
+    },
+    "execution_dark_doc_night_meeting": {
+        "stress_late_reading_dark_mode",
+        "stress_imminent_meeting_open_doc",
+        "night_eye_care",
+        "pre_meeting_prep",
+    },
+    "execution_battery_dnd_focus_low": {
+        "stress_critical_reachability_battery_saver",
+        "stress_focus_block_dnd",
+        "battery_saver",
+        "deep_work",
+    },
+    "execution_mute_dark_quiet_night": {
+        "stress_public_bluetooth_leak_mute",
+        "stress_private_bluetooth_boundary",
+        "stress_late_reading_dark_mode",
+        "bluetooth_cleanup",
+        "night_eye_care",
+    },
+    "execution_mute_dnd_workshop": {
+        "stress_public_bluetooth_leak_mute",
+        "stress_focus_block_dnd",
+        "bluetooth_cleanup",
+        "deep_work",
+    },
+    "execution_triple_quiet_low_night": {
+        "stress_public_bluetooth_leak_mute",
+        "stress_critical_reachability_battery_saver",
+        "stress_late_reading_dark_mode",
+        "bluetooth_cleanup",
+        "battery_saver",
+        "night_eye_care",
+    },
+    "execution_triple_focus_low_night": {
+        "stress_critical_reachability_battery_saver",
+        "stress_late_reading_dark_mode",
+        "stress_focus_block_dnd",
+        "battery_saver",
+        "night_eye_care",
+        "deep_work",
+    },
+    "execution_triple_meeting_low_night": {
+        "stress_critical_reachability_battery_saver",
+        "stress_late_reading_dark_mode",
+        "stress_imminent_meeting_open_doc",
+        "battery_saver",
+        "night_eye_care",
+        "pre_meeting_prep",
+    },
+    "execution_triple_public_meeting_low": {
+        "stress_public_bluetooth_leak_mute",
+        "stress_critical_reachability_battery_saver",
+        "stress_imminent_meeting_open_doc",
+        "bluetooth_cleanup",
+        "battery_saver",
+        "pre_meeting_prep",
+    },
+    "execution_triple_workshop_night": {
+        "stress_public_bluetooth_leak_mute",
+        "stress_late_reading_dark_mode",
+        "stress_focus_block_dnd",
+        "bluetooth_cleanup",
+        "night_eye_care",
+        "deep_work",
+    },
+    "execution_all_but_dnd_incident_prep": {
+        "stress_public_bluetooth_leak_mute",
+        "stress_critical_reachability_battery_saver",
+        "stress_late_reading_dark_mode",
+        "stress_imminent_meeting_open_doc",
+        "stress_on_call_dnd_boundary",
+        "bluetooth_cleanup",
+        "battery_saver",
+        "night_eye_care",
+        "pre_meeting_prep",
+        "mattermost_response",
+    },
+}
+
+
+def _is_cold_start_transfer_match(
+    *,
+    source_task: str | None,
+    target_task_family: str | None,
+) -> bool:
+    if not source_task or not target_task_family:
+        return False
+    return source_task in _COLD_START_TRANSFER_SOURCE_FAMILIES.get(target_task_family, set())
+
+
 def _transfer_gate(
     memory: dict[str, Any],
     *,
@@ -143,11 +295,23 @@ def _transfer_gate(
 ) -> float:
     source_profile = _memory_profile(memory)
     source_task = _memory_task_family(memory)
+    target_key = f"{target_profile}::{target_task_family}" if target_profile and target_task_family else ""
+    transfer_item = (memory.get("transfer_stats", {}) or {}).get(target_key, {}) if target_key else {}
+    if "gate" in transfer_item:
+        return _clamp(_safe_float(transfer_item.get("gate"), 0.0), 0.0, 1.0)
+    if target_task_family and source_task and source_task != target_task_family:
+        if _is_cold_start_transfer_match(
+            source_task=source_task,
+            target_task_family=target_task_family,
+        ):
+            return 0.35 if source_profile != target_profile else 0.15
+        if target_profile and source_profile == target_profile:
+            return 0.05
+        return 0.0
+    if target_task_family and source_task == target_task_family and not target_profile:
+        return 0.35
     if not target_profile or not target_task_family or not source_profile or not source_task:
         return 0.25
-
-    target_key = f"{target_profile}::{target_task_family}"
-    transfer_item = (memory.get("transfer_stats", {}) or {}).get(target_key, {})
 
     if source_profile == target_profile and source_task == target_task_family:
         base_gate = 1.0
@@ -158,8 +322,6 @@ def _transfer_gate(
     else:
         base_gate = 0.0
 
-    if "gate" in transfer_item:
-        return _clamp(_safe_float(transfer_item.get("gate"), base_gate), 0.0, 1.0)
     return _clamp(base_gate, 0.0, 1.0)
 
 
@@ -219,16 +381,16 @@ class MemRLRetriever:
                 continue
             memory = self.memories[memory_id]
             q_value = _clamp(_safe_float(memory.get("q_value", 0.0)), -1.0, 1.0)
+            source_task_family = _memory_task_family(memory)
+            cold_start_transfer_match = _is_cold_start_transfer_match(
+                source_task=source_task_family,
+                target_task_family=target_task_family,
+            )
             if scoring_mode in {"similarity_only", "semantic_only"}:
                 base_score = sim
             else:
                 base_score = 0.7 * sim + 0.3 * abs(q_value)
             if transfer_gate_disabled:
-                if not _same_task_or_unscoped_memory(
-                    memory,
-                    target_task_family=target_task_family,
-                ):
-                    continue
                 transfer_gate = 1.0
             else:
                 transfer_gate = _transfer_gate(
@@ -236,6 +398,8 @@ class MemRLRetriever:
                     target_profile=target_profile,
                     target_task_family=target_task_family,
                 )
+                if transfer_gate <= 0.0:
+                    continue
             score = transfer_gate * base_score
             ranked.append(
                 {
@@ -246,6 +410,8 @@ class MemRLRetriever:
                     "transfer_gate": transfer_gate,
                     "target_profile": target_profile,
                     "target_task_family": target_task_family,
+                    "source_task_family": source_task_family,
+                    "cold_start_transfer_match": cold_start_transfer_match,
                     "retrieval_scoring": scoring_mode,
                     "transfer_gate_disabled": transfer_gate_disabled,
                 }
@@ -353,6 +519,8 @@ class MemRLRetriever:
             total_weight += weight
             if str(memory.get("context_family", "general")) == context_family:
                 matched_weight += weight
+            elif item.get("cold_start_transfer_match"):
+                matched_weight += 0.55 * weight
             side = item.get("evidence_side") or _evidence_side(memory)
             if side == "intervene":
                 intervene_value += strength
@@ -567,8 +735,12 @@ class MemRLRetriever:
             total_weight += weight
             if str(memory.get("context_family", "general")) == context_family:
                 matched_weight += 0.6 * weight
+            elif item.get("cold_start_transfer_match"):
+                matched_weight += 0.35 * weight
             if str(memory.get("action_family", "no_intervention")) == action_family:
                 matched_weight += 0.4 * weight
+            elif item.get("cold_start_transfer_match"):
+                matched_weight += 0.25 * weight
 
             strength = weight * abs(q_value)
             side = item.get("evidence_side") or _evidence_side(memory)
@@ -653,30 +825,40 @@ class MemRLRetriever:
         weak_uncertain = [item for item in ranked if _value_bucket(item["memory"]) == "weak_uncertain"]
         positives = helpful_positive + missed_help
         negatives = correct_abstain + bad_intervention
+        same_context_positives = [
+            item for item in positives
+            if str(item["memory"].get("context_family", "general")) == context_family
+        ]
+        same_context_negatives = [
+            item for item in negatives
+            if str(item["memory"].get("context_family", "general")) == context_family
+        ]
+        example_positives = same_context_positives or positives
+        example_negatives = same_context_negatives or negatives
         generation_recommendation = self._recommend_for_generation(ranked, context_family=context_family)
-        level_counter = Counter(_candidate_level(item["memory"]) for item in positives)
+        level_counter = Counter(_candidate_level(item["memory"]) for item in example_positives)
         preferred_level = level_counter.most_common(1)[0][0] if level_counter else 0
         preferred_action_families = [
             action_family
             for action_family, _ in Counter(
-                str(item["memory"].get("action_family", "no_intervention")) for item in positives
+                str(item["memory"].get("action_family", "no_intervention")) for item in example_positives
             ).most_common(2)
         ]
         disallowed_action_families = [
             action_family
             for action_family, _ in Counter(
-                str(item["memory"].get("action_family", "no_intervention")) for item in negatives
+                str(item["memory"].get("action_family", "no_intervention")) for item in example_negatives
             ).most_common(2)
         ]
         positive_patterns = [
             item["memory"].get("candidate", {}).get("proactive_task")
             or item["memory"].get("candidate", {}).get("purpose")
-            for item in positives[:3]
+            for item in example_positives[:3]
         ]
         negative_patterns = [
             item["memory"].get("simulation", {}).get("reasoning")
             or item["memory"].get("decision", {}).get("reason")
-            for item in negatives[:3]
+            for item in example_negatives[:3]
         ]
         avoid_patterns = [
             item["memory"].get("candidate", {}).get("response")
@@ -685,8 +867,8 @@ class MemRLRetriever:
         ]
         prior = {
             "current_context_family": context_family,
-            "candidate_positive_examples": [item["memory"] for item in positives[:3]],
-            "candidate_negative_examples": [item["memory"] for item in negatives[:3]],
+            "candidate_positive_examples": [item["memory"] for item in example_positives[:3]],
+            "candidate_negative_examples": [item["memory"] for item in example_negatives[:3]],
             "generation_recommendation": generation_recommendation,
             "intervene_memory_value": generation_recommendation["intervene_memory_value"],
             "abstain_memory_value": generation_recommendation["abstain_memory_value"],
@@ -794,11 +976,11 @@ class MemRLRetriever:
         )
         intervene = [
             item for item in ranked
-            if bool(item["memory"].get("decision", {}).get("should_intervene"))
+            if (item.get("evidence_side") or _evidence_side(item["memory"])) == "intervene"
         ]
         abstain = [
             item for item in ranked
-            if not bool(item["memory"].get("decision", {}).get("should_intervene"))
+            if (item.get("evidence_side") or _evidence_side(item["memory"])) == "abstain"
         ]
         level_counter = Counter(_candidate_level(item["memory"]) for item in intervene[:5])
         memory_level_mode = level_counter.most_common(1)[0][0] if level_counter else 0
@@ -826,6 +1008,11 @@ class MemRLRetriever:
             "historical_reject_risk": historical_reject_risk,
             "memory_recommendation": memory_recommendation,
             "used_memory_ids": [item["memory"]["memory_id"] for item in ranked[:6]],
+            "transfer_target_families": {
+                item["memory"]["memory_id"]: item.get("target_task_family")
+                for item in ranked
+                if item.get("target_task_family")
+            },
         }
         prior["decision_context"] = build_decision_context(prior)
         return prior
