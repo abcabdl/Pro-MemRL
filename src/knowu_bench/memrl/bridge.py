@@ -256,6 +256,15 @@ def _safe_float(value: Any, default: float = 0.0) -> float:
         return default
 
 
+def _env_float(name: str, default: float, *, low: float | None = None, high: float | None = None) -> float:
+    value = _safe_float(os.getenv(name), default)
+    if low is not None:
+        value = max(low, value)
+    if high is not None:
+        value = min(high, value)
+    return value
+
+
 def _memory_q_value(memory: dict[str, Any]) -> float:
     if "q_value" in memory:
         return _safe_float(memory.get("q_value"), 0.0)
@@ -349,6 +358,31 @@ class KnowUMemRLBridge:
         self.freeze_updates = _env_flag("KNOWU_MEMRL_FREEZE_UPDATES", True)
         self.disable_q_updates = _env_flag("KNOWU_MEMRL_DISABLE_Q_UPDATES")
         self.append_runtime_episodes = _env_flag("KNOWU_MEMRL_APPEND_RUNTIME_EPISODES", False)
+        self.similarity_weight = _env_float(
+            "KNOWU_MEMRL_SIMILARITY_WEIGHT",
+            0.7,
+            low=0.0,
+            high=1.0,
+        )
+        self.utility_weight = _env_float(
+            "KNOWU_MEMRL_UTILITY_WEIGHT",
+            1.0 - self.similarity_weight,
+            low=0.0,
+            high=1.0,
+        )
+        total_weight = self.similarity_weight + self.utility_weight
+        if total_weight <= 0.0:
+            self.similarity_weight = 0.7
+            self.utility_weight = 0.3
+        else:
+            self.similarity_weight /= total_weight
+            self.utility_weight /= total_weight
+        self.default_cross_profile_gate = _env_float(
+            "KNOWU_MEMRL_DEFAULT_CROSS_PROFILE_GATE",
+            0.35,
+            low=0.0,
+            high=1.0,
+        )
         self._load_runtime()
 
     def _load_runtime(self) -> None:
@@ -890,6 +924,16 @@ class KnowUMemRLBridge:
                 "component_profiles": component_profiles,
                 "component_transfer_gates": component_transfer_gates,
                 "component_selection_scores": component_selection_scores,
+                "sensitivity_config": {
+                    "similarity_weight": self.similarity_weight,
+                    "utility_weight": self.utility_weight,
+                    "default_cross_profile_gate": self.default_cross_profile_gate,
+                    "dominance_threshold": _env_float(
+                        "KNOWU_MEMRL_BALANCE_DOMINANCE_THRESHOLD",
+                        1.5,
+                        low=1.0,
+                    ),
+                },
                 "transfer_target_families": {
                     str(memory.get("memory_id")): component
                     for memory, component in zip(component_memories, components)
@@ -947,7 +991,7 @@ class KnowUMemRLBridge:
             target_profile=target_profile,
             target_task_family=target_task_family,
         )
-        base_score = 0.7 * similarity + 0.3 * abs(q_value)
+        base_score = self.similarity_weight * similarity + self.utility_weight * abs(q_value)
         transfer_gate = self._component_transfer_gate(
             memory,
             target_profile=target_profile,
@@ -973,8 +1017,8 @@ class KnowUMemRLBridge:
             return 0.25
         return 0.05
 
-    @staticmethod
     def _component_transfer_gate(
+        self,
         memory: dict[str, Any],
         *,
         target_profile: str,
@@ -992,7 +1036,7 @@ class KnowUMemRLBridge:
         if source_profile == target_profile and source_task_family == target_task_family:
             return 1.0
         if source_profile != target_profile and source_task_family == target_task_family:
-            return 0.35
+            return self.default_cross_profile_gate
         if source_profile == target_profile and source_task_family != target_task_family:
             return 0.05
         return 0.0

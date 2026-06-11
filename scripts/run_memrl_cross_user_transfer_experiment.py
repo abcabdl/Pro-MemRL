@@ -30,7 +30,14 @@ CONDITIONS = (
     *DEFAULT_CONDITIONS,
     "no_memory",
     "source_only_no_gate",
+    "source_only_gate_frozen",
     "source_only_gate",
+    "prism_style_no_memory_gate",
+    "knowu_e2e_interface",
+)
+
+ABLATION_CHOICES = (
+    "profile_similarity_gate",
 )
 
 
@@ -50,6 +57,22 @@ def _parse_extra_args(values: list[str] | None) -> list[str]:
     if values and values[0] == "--":
         return values[1:]
     return values
+
+
+def _normalize_ablations(values: list[str] | None) -> list[str]:
+    ablations: list[str] = []
+    for value in values or []:
+        for item in str(value).split(","):
+            item = item.strip().lower().replace("-", "_")
+            if not item or item == "none":
+                continue
+            if item not in ABLATION_CHOICES:
+                raise ValueError(
+                    f"Unknown ablation {item!r}; expected one of: {', '.join(ABLATION_CHOICES)}"
+                )
+            if item not in ablations:
+                ablations.append(item)
+    return ablations
 
 
 def _display_command(command: list[str]) -> str:
@@ -235,7 +258,7 @@ def _build_condition_bootstrap(
         per_family=source_memories_per_family,
     )
 
-    if condition == "no_memory":
+    if condition in {"no_memory", "prism_style_no_memory_gate", "knowu_e2e_interface"}:
         rows = []
         included_target_count = 0
         included_source_count = 0
@@ -252,7 +275,7 @@ def _build_condition_bootstrap(
         rows = [*target_memories, *source_memories]
         included_target_count = len(target_memories)
         included_source_count = len(source_memories)
-    elif condition in {"source_only_no_gate", "source_only_gate"}:
+    elif condition in {"source_only_no_gate", "source_only_gate_frozen", "source_only_gate"}:
         rows = limited_source_memories
         included_target_count = 0
         included_source_count = len(limited_source_memories)
@@ -375,6 +398,39 @@ def _load_memrl_plan(round_dir: Path, task_name: str) -> dict[str, Any] | None:
         return None
 
 
+def _load_traj_actions(round_dir: Path, task_name: str) -> list[dict[str, Any]]:
+    traj_path = round_dir / task_name / "traj.json"
+    if not traj_path.exists():
+        return []
+    try:
+        data = json.loads(traj_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return []
+    actions: list[dict[str, Any]] = []
+    for episode in data.values() if isinstance(data, dict) else []:
+        if not isinstance(episode, dict):
+            continue
+        for item in episode.get("traj", []) or []:
+            action = item.get("action") if isinstance(item, dict) else None
+            if isinstance(action, dict):
+                actions.append(action)
+    return actions
+
+
+def _infer_intervention_from_actions(actions: list[dict[str, Any]]) -> bool | None:
+    if not actions:
+        return None
+    passive = {"finished", "status", "wait", "unknown", "error_env"}
+    for action in actions:
+        action_type = str(action.get("action_type") or "").strip().lower()
+        if not action_type:
+            continue
+        if action_type in passive:
+            continue
+        return True
+    return False
+
+
 def _annotate_decision_metrics(
     report: dict[str, Any] | None,
     *,
@@ -402,6 +458,10 @@ def _annotate_decision_metrics(
         decision = plan.get("decision", {}) if isinstance(plan, dict) else {}
         candidate = plan.get("candidate", {}) if isinstance(plan, dict) else {}
         predicted_should = _bool_or_none(decision.get("should_intervene"))
+        if predicted_should is None:
+            predicted_should = _infer_intervention_from_actions(
+                _load_traj_actions(round_dir, task_name)
+            )
 
         item["memrl_gold_should"] = gold_should
         item["memrl_should_intervene"] = predicted_should
@@ -485,14 +545,19 @@ def _copy_state_dir(src: Path, dst: Path) -> None:
         shutil.copytree(src, dst)
 
 
-def _condition_env(condition: str) -> dict[str, str]:
+def _apply_ablation_env(env: dict[str, str], ablations: list[str]) -> None:
+    if "profile_similarity_gate" in ablations:
+        env["KNOWU_MEMRL_USE_PROFILE_SIMILARITY_GATE"] = "true"
+
+
+def _condition_env(condition: str, ablations: list[str] | None = None) -> dict[str, str]:
     common_retrieval = {
         "KNOWU_MEMRL_USE_COMPOSITE_COMPONENT_SHORTCUT": "false",
         "KNOWU_MEMRL_USE_DIRECT_SHORTCUTS": "false",
         "KNOWU_ROUTINE_PENALIZE_UNNECESSARY_ASK": "true",
     }
-    if condition == "no_memory":
-        return {
+    if condition in {"no_memory", "prism_style_no_memory_gate", "knowu_e2e_interface"}:
+        env = {
             **common_retrieval,
             "KNOWU_MEMRL_USE_MEMORY": "false",
             "KNOWU_MEMRL_FREEZE_UPDATES": "true",
@@ -500,67 +565,103 @@ def _condition_env(condition: str) -> dict[str, str]:
             "KNOWU_MEMRL_DISABLE_TRANSFER_GATE": "true",
             "KNOWU_MEMRL_APPEND_RUNTIME_EPISODES": "false",
         }
+        _apply_ablation_env(env, ablations or [])
+        return env
     if condition == "same_user_only":
-        return {**common_retrieval, "KNOWU_MEMRL_FREEZE_UPDATES": "true"}
+        env = {**common_retrieval, "KNOWU_MEMRL_FREEZE_UPDATES": "true"}
+        _apply_ablation_env(env, ablations or [])
+        return env
     if condition == "same_user_online":
-        return {
+        env = {
             **common_retrieval,
             "KNOWU_MEMRL_FREEZE_UPDATES": "false",
             "KNOWU_MEMRL_TRANSFER_GATE_MODE": "no_transfer_gate",
             "KNOWU_MEMRL_DISABLE_TRANSFER_GATE": "true",
             "KNOWU_MEMRL_APPEND_RUNTIME_EPISODES": "false",
         }
+        _apply_ablation_env(env, ablations or [])
+        return env
     if condition == "cross_user_no_gate":
-        return {
+        env = {
             **common_retrieval,
             "KNOWU_MEMRL_FREEZE_UPDATES": "true",
             "KNOWU_MEMRL_TRANSFER_GATE_MODE": "no_transfer_gate",
             "KNOWU_MEMRL_DISABLE_TRANSFER_GATE": "true",
         }
+        _apply_ablation_env(env, ablations or [])
+        return env
     if condition == "cross_user_no_gate_online":
-        return {
+        env = {
             **common_retrieval,
             "KNOWU_MEMRL_FREEZE_UPDATES": "false",
             "KNOWU_MEMRL_TRANSFER_GATE_MODE": "no_transfer_gate",
             "KNOWU_MEMRL_DISABLE_TRANSFER_GATE": "true",
             "KNOWU_MEMRL_APPEND_RUNTIME_EPISODES": "false",
         }
+        _apply_ablation_env(env, ablations or [])
+        return env
     if condition == "cross_user_gate_frozen":
-        return {
+        env = {
             **common_retrieval,
             "KNOWU_MEMRL_FREEZE_UPDATES": "true",
             "KNOWU_MEMRL_TRANSFER_GATE_MODE": "default",
             "KNOWU_MEMRL_DISABLE_TRANSFER_GATE": "false",
         }
+        _apply_ablation_env(env, ablations or [])
+        return env
     if condition == "transfer_gate_online":
-        return {
+        env = {
             **common_retrieval,
             "KNOWU_MEMRL_FREEZE_UPDATES": "false",
             "KNOWU_MEMRL_TRANSFER_GATE_MODE": "default",
             "KNOWU_MEMRL_DISABLE_TRANSFER_GATE": "false",
             "KNOWU_MEMRL_APPEND_RUNTIME_EPISODES": "false",
         }
+        _apply_ablation_env(env, ablations or [])
+        return env
     if condition == "source_only_no_gate":
-        return {
+        env = {
             **common_retrieval,
             "KNOWU_MEMRL_FREEZE_UPDATES": "false",
             "KNOWU_MEMRL_TRANSFER_GATE_MODE": "no_transfer_gate",
             "KNOWU_MEMRL_DISABLE_TRANSFER_GATE": "true",
             "KNOWU_MEMRL_APPEND_RUNTIME_EPISODES": "false",
         }
+        _apply_ablation_env(env, ablations or [])
+        return env
+    if condition == "source_only_gate_frozen":
+        env = {
+            **common_retrieval,
+            "KNOWU_MEMRL_FREEZE_UPDATES": "true",
+            "KNOWU_MEMRL_TRANSFER_GATE_MODE": "default",
+            "KNOWU_MEMRL_DISABLE_TRANSFER_GATE": "false",
+            "KNOWU_MEMRL_APPEND_RUNTIME_EPISODES": "false",
+        }
+        _apply_ablation_env(env, ablations or [])
+        return env
     if condition == "source_only_gate":
-        return {
+        env = {
             **common_retrieval,
             "KNOWU_MEMRL_FREEZE_UPDATES": "false",
             "KNOWU_MEMRL_TRANSFER_GATE_MODE": "default",
             "KNOWU_MEMRL_DISABLE_TRANSFER_GATE": "false",
             "KNOWU_MEMRL_APPEND_RUNTIME_EPISODES": "false",
         }
+        _apply_ablation_env(env, ablations or [])
+        return env
     raise ValueError(f"Unknown condition: {condition}")
 
 
 def _condition_memrl_use_memory(condition: str) -> bool:
-    return condition != "no_memory"
+    return condition not in {"no_memory", "prism_style_no_memory_gate", "knowu_e2e_interface"}
+
+
+def _condition_agent_type(condition: str, default_agent_type: str) -> str:
+    if condition == "prism_style_no_memory_gate":
+        return "prism_style_no_memory"
+    if condition == "knowu_e2e_interface":
+        return "general_e2e"
+    return default_agent_type
 
 
 def _request_json(url: str, *, method: str, timeout: float) -> Any:
@@ -596,6 +697,11 @@ def _switch_url(
     return f"{aw_host.rstrip('/')}/suite_family/switch?{params}"
 
 
+def _first_aw_host(aw_host: str) -> str:
+    hosts = _parse_csv(aw_host)
+    return hosts[0] if hosts else aw_host
+
+
 def _expected_tasks(task_arg: str) -> list[str]:
     tasks = _parse_csv(task_arg)
     if len(tasks) == 1 and tasks[0].upper() == "ALL":
@@ -616,9 +722,14 @@ def _ensure_backend_tasks(
 ) -> None:
     if not expected_tasks:
         return
+    check_host = _first_aw_host(aw_host)
 
     def available_tasks() -> set[str]:
-        task_list = _request_json(f"{aw_host.rstrip('/')}/task/list", method="GET", timeout=timeout)
+        task_list = _request_json(
+            f"{check_host.rstrip('/')}/task/list",
+            method="GET",
+            timeout=timeout,
+        )
         return {str(item.get("name")) for item in task_list or [] if isinstance(item, dict)}
 
     available = available_tasks()
@@ -628,7 +739,7 @@ def _ensure_backend_tasks(
         for top_k in (force_top_k, rag_top_k):
             _request_json(
                 _switch_url(
-                    aw_host,
+                    check_host,
                     user_log_mode=user_log_mode,
                     rag_top_k=top_k,
                     rag_backend=rag_backend,
@@ -672,8 +783,12 @@ def _write_summary(output_root: Path, rows: list[dict[str, Any]]) -> None:
         "target_memories_per_family",
         "source_memories_per_family",
         "source_users",
+        "ablations",
+        "agent_type",
+        "evaluation_interface",
         "memrl_use_memory",
         "transfer_gate",
+        "profile_similarity_gate",
         "freeze_updates",
         "report_path",
         "run_log",
@@ -740,6 +855,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Keep memories whose profile or routine family cannot be inferred.",
     )
     parser.add_argument("--rounds", type=int, default=1, help="Repeated eval rounds per condition.")
+    parser.add_argument(
+        "--ablation",
+        action="append",
+        default=[],
+        help=(
+            "Optional MemRL ablation(s), comma-separated or repeated. Choices: "
+            f"{', '.join(ABLATION_CHOICES)}."
+        ),
+    )
     parser.add_argument("--output-root", default=None, help="Root directory for generated bootstraps and runs.")
     parser.add_argument(
         "--bootstrap",
@@ -823,6 +947,7 @@ def main() -> int:
     unknown = [condition for condition in conditions if condition not in CONDITIONS]
     if unknown:
         raise ValueError(f"Unknown condition(s): {', '.join(unknown)}")
+    ablations = _normalize_ablations(args.ablation)
 
     extra_args = _parse_extra_args(args.extra_args)
     expected_tasks = _expected_tasks(args.task)
@@ -843,6 +968,7 @@ def main() -> int:
         "target_user": args.target_user,
         "source_users": source_users,
         "conditions": conditions,
+        "ablations": ablations,
         "target_memories_per_family": args.target_memories_per_family,
         "source_memories_per_family": args.source_memories_per_family,
         "include_unscoped_memories": args.include_unscoped_memories,
@@ -860,6 +986,7 @@ def main() -> int:
     print(f"[cross-user-transfer] target_user={args.target_user}")
     print(f"[cross-user-transfer] source_users={','.join(source_users) if source_users else 'none'}")
     print(f"[cross-user-transfer] conditions={','.join(conditions)}")
+    print(f"[cross-user-transfer] ablations={','.join(ablations) if ablations else 'none'}")
 
     for condition in conditions:
         condition_bootstrap, bootstrap_meta = _build_condition_bootstrap(
@@ -914,7 +1041,7 @@ def main() -> int:
                     _copy_state_dir(resume_state_dir, state_dir)
                 summary = _report_summary(report)
                 memory_after = _memory_count(state_dir)
-                env_meta = _condition_env(condition)
+                env_meta = _condition_env(condition, ablations)
                 row = {
                     "condition": condition,
                     "round": round_idx,
@@ -928,8 +1055,12 @@ def main() -> int:
                     "target_memories_per_family": args.target_memories_per_family,
                     "source_memories_per_family": args.source_memories_per_family,
                     "source_users": ",".join(source_users),
+                    "ablations": ",".join(ablations),
+                    "agent_type": _condition_agent_type(condition, args.agent_type),
+                    "evaluation_interface": condition,
                     "memrl_use_memory": str(_condition_memrl_use_memory(condition)).lower(),
                     "transfer_gate": env_meta.get("KNOWU_MEMRL_TRANSFER_GATE_MODE", "default"),
+                    "profile_similarity_gate": env_meta.get("KNOWU_MEMRL_USE_PROFILE_SIMILARITY_GATE", "false"),
                     "freeze_updates": env_meta.get("KNOWU_MEMRL_FREEZE_UPDATES", "true"),
                     "report_path": str(resume_report_path),
                     "run_log": str(run_log),
@@ -965,13 +1096,14 @@ def main() -> int:
                     )
                 )
                 continue
+            effective_agent_type = _condition_agent_type(condition, args.agent_type)
             command = [
                 "uv",
                 "run",
                 "mw",
                 "eval",
                 "--agent-type",
-                args.agent_type,
+                effective_agent_type,
                 "--task",
                 args.task,
                 "--task-tags",
@@ -1014,7 +1146,7 @@ def main() -> int:
             env = os.environ.copy()
             env["KNOWU_MEMRL_BOOTSTRAP"] = str(bootstrap_path)
             env["KNOWU_MEMRL_STATE_DIR"] = str(state_dir)
-            env.update(_condition_env(condition))
+            env.update(_condition_env(condition, ablations))
 
             print(
                 f"[cross-user-transfer] condition={condition} round={round_idx}/{args.rounds}: "
@@ -1048,7 +1180,7 @@ def main() -> int:
             memory_after = _memory_count(state_dir)
             if not args.dry_run:
                 _copy_state_dir(state_dir, round_dir / "memory_state_after")
-            env_meta = _condition_env(condition)
+            env_meta = _condition_env(condition, ablations)
             row = {
                 "condition": condition,
                 "round": round_idx,
@@ -1061,9 +1193,13 @@ def main() -> int:
                 "available_source_memory_count": bootstrap_meta["available_source_memory_count"],
                 "target_memories_per_family": args.target_memories_per_family,
                 "source_memories_per_family": args.source_memories_per_family,
-                "source_users": ",".join(source_users),
-                "memrl_use_memory": str(_condition_memrl_use_memory(condition)).lower(),
-                "transfer_gate": env_meta.get("KNOWU_MEMRL_TRANSFER_GATE_MODE", "default"),
+                    "source_users": ",".join(source_users),
+                    "ablations": ",".join(ablations),
+                    "agent_type": effective_agent_type,
+                    "evaluation_interface": condition,
+                    "memrl_use_memory": str(_condition_memrl_use_memory(condition)).lower(),
+                    "transfer_gate": env_meta.get("KNOWU_MEMRL_TRANSFER_GATE_MODE", "default"),
+                    "profile_similarity_gate": env_meta.get("KNOWU_MEMRL_USE_PROFILE_SIMILARITY_GATE", "false"),
                 "freeze_updates": env_meta.get("KNOWU_MEMRL_FREEZE_UPDATES", "true"),
                 "report_path": str(report_path or ""),
                 "run_log": str(run_log),

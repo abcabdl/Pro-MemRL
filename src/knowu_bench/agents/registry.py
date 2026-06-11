@@ -16,6 +16,9 @@ from knowu_bench.agents.implementations.general_e2e_agent import GeneralE2EAgent
 from knowu_bench.agents.implementations.mai_ui_agent import MAIUINaivigationAgent
 from knowu_bench.agents.implementations.memrl_knowu_agent import MemRLKnowUAgentMCP
 from knowu_bench.agents.implementations.planner_executor import PlannerExecutorAgentMCP
+from knowu_bench.agents.implementations.prism_style_no_memory_agent import (
+    PRISMStyleNoMemoryAgentMCP,
+)
 from knowu_bench.agents.implementations.qwen3_6_plus import Qwen36PlusAgentMCP
 from knowu_bench.agents.implementations.qwen3vl import Qwen3VLAgentMCP
 from knowu_bench.agents.implementations.qwen3_5 import Qwen3_5AgentMCP
@@ -56,6 +59,9 @@ AGENT_CONFIGS = {
     },
     "memrl_knowu": {
         "class": MemRLKnowUAgentMCP,
+    },
+    "prism_style_no_memory": {
+        "class": PRISMStyleNoMemoryAgentMCP,
     },
 }
 

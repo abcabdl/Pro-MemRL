@@ -4,6 +4,7 @@ import json
 import os
 import re
 from collections import Counter
+from pathlib import Path
 from typing import Any
 
 from .formatters import (
@@ -13,7 +14,7 @@ from .formatters import (
     build_observation_text,
     build_simulation_context,
 )
-from .index import EmbeddingIndex
+from .index import EmbeddingIndex, cosine_similarity, tokenize
 from .schema import enrich_memory_schema, infer_action_family, infer_context_family
 
 
@@ -41,6 +42,15 @@ def _env_flag(name: str, default: bool = False) -> bool:
 
 def _env_choice(name: str, default: str) -> str:
     return str(os.getenv(name, default) or default).strip().lower().replace("-", "_")
+
+
+def _env_float(name: str, default: float, *, low: float | None = None, high: float | None = None) -> float:
+    value = _safe_float(os.getenv(name), default)
+    if low is not None:
+        value = max(low, value)
+    if high is not None:
+        value = min(high, value)
+    return value
 
 
 def _gate_trust_multiplier(memory: dict[str, Any]) -> float:
@@ -338,12 +348,51 @@ def _same_task_or_unscoped_memory(
     return source_task == target_task_family
 
 
+def _profile_similarity_gate_enabled() -> bool:
+    return _env_flag("KNOWU_MEMRL_USE_PROFILE_SIMILARITY_GATE")
+
+
+def _default_profile_dir() -> Path:
+    return Path(__file__).resolve().parents[3] / "src" / "knowu_bench" / "user_profile"
+
+
+def _count_vector(text: str) -> dict[str, float]:
+    counts = Counter(tokenize(text))
+    return {token: float(count) for token, count in counts.items()}
+
+
 class MemRLRetriever:
     def __init__(self, *, topk: int = 8, sim_threshold: float = 0.18) -> None:
         self.topk = topk
         self.sim_threshold = sim_threshold
+        self.similarity_weight = _env_float(
+            "KNOWU_MEMRL_SIMILARITY_WEIGHT",
+            0.7,
+            low=0.0,
+            high=1.0,
+        )
+        self.utility_weight = _env_float(
+            "KNOWU_MEMRL_UTILITY_WEIGHT",
+            1.0 - self.similarity_weight,
+            low=0.0,
+            high=1.0,
+        )
+        total_weight = self.similarity_weight + self.utility_weight
+        if total_weight <= 0.0:
+            self.similarity_weight = 0.7
+            self.utility_weight = 0.3
+        else:
+            self.similarity_weight /= total_weight
+            self.utility_weight /= total_weight
+        self.dominance_threshold = _env_float(
+            "KNOWU_MEMRL_BALANCE_DOMINANCE_THRESHOLD",
+            1.5,
+            low=1.0,
+        )
         self.index = EmbeddingIndex()
         self.memories: dict[str, dict[str, Any]] = {}
+        self.profile_texts: dict[str, str] = {}
+        self.profile_similarity_cache: dict[tuple[str, str], float] = {}
 
     def build(self, memories: list[dict[str, Any]]) -> None:
         for item in memories:
@@ -354,6 +403,57 @@ class MemRLRetriever:
             for item in memories
         ]
         self.index.build(doc_pairs)
+        self.profile_texts = {}
+        self.profile_similarity_cache = {}
+
+    def _load_profile_texts(self) -> dict[str, str]:
+        if self.profile_texts:
+            return self.profile_texts
+        configured = os.getenv("KNOWU_MEMRL_PROFILE_DIR")
+        profile_dir = Path(configured) if configured else _default_profile_dir()
+        if not profile_dir.exists():
+            self.profile_texts = {}
+            return self.profile_texts
+        texts: dict[str, str] = {}
+        for path in sorted(profile_dir.glob("*.yaml")):
+            if path.stem == "template":
+                continue
+            try:
+                texts[path.stem] = path.read_text(encoding="utf-8")
+            except OSError:
+                continue
+        self.profile_texts = texts
+        return self.profile_texts
+
+    def _profile_similarity(self, source_profile: str | None, target_profile: str | None) -> float:
+        if not source_profile or not target_profile:
+            return 1.0
+        if source_profile == target_profile:
+            return 1.0
+        key = tuple(sorted((source_profile, target_profile)))
+        if key in self.profile_similarity_cache:
+            return self.profile_similarity_cache[key]
+        texts = self._load_profile_texts()
+        source_text = texts.get(source_profile, "")
+        target_text = texts.get(target_profile, "")
+        if not source_text or not target_text:
+            similarity = 1.0
+        elif self.index.enabled and self.index.model is not None:
+            try:
+                embeddings = self.index.model.encode(
+                    [source_text, target_text],
+                    normalize_embeddings=True,
+                    show_progress_bar=False,
+                )
+                similarity = float(embeddings[0] @ embeddings[1])
+            except Exception:
+                similarity = cosine_similarity(_count_vector(source_text), _count_vector(target_text))
+        else:
+            similarity = cosine_similarity(_count_vector(source_text), _count_vector(target_text))
+        floor = _clamp(_safe_float(os.getenv("KNOWU_MEMRL_PROFILE_SIMILARITY_FLOOR"), 0.0), 0.0, 1.0)
+        similarity = _clamp(similarity, floor, 1.0)
+        self.profile_similarity_cache[key] = similarity
+        return similarity
 
     def _base_query(self, observations: list[dict[str, Any]], signals: dict[str, Any]) -> str:
         context_family = infer_context_family(observations, signals)
@@ -381,6 +481,7 @@ class MemRLRetriever:
                 continue
             memory = self.memories[memory_id]
             q_value = _clamp(_safe_float(memory.get("q_value", 0.0)), -1.0, 1.0)
+            source_profile = _memory_profile(memory)
             source_task_family = _memory_task_family(memory)
             cold_start_transfer_match = _is_cold_start_transfer_match(
                 source_task=source_task_family,
@@ -389,7 +490,7 @@ class MemRLRetriever:
             if scoring_mode in {"similarity_only", "semantic_only"}:
                 base_score = sim
             else:
-                base_score = 0.7 * sim + 0.3 * abs(q_value)
+                base_score = self.similarity_weight * sim + self.utility_weight * abs(q_value)
             if transfer_gate_disabled:
                 transfer_gate = 1.0
             else:
@@ -400,11 +501,27 @@ class MemRLRetriever:
                 )
                 if transfer_gate <= 0.0:
                     continue
+            profile_similarity = 1.0
+            profile_similarity_applied = False
+            if (
+                _profile_similarity_gate_enabled()
+                and target_profile
+                and source_profile
+                and source_profile != target_profile
+                and target_task_family
+                and source_task_family
+            ):
+                profile_similarity = self._profile_similarity(source_profile, target_profile)
+                profile_similarity_applied = True
             score = transfer_gate * base_score
+            if profile_similarity_applied:
+                score *= profile_similarity
             ranked.append(
                 {
                     "memory": memory,
                     "similarity": sim,
+                    "profile_similarity": profile_similarity,
+                    "profile_similarity_applied": profile_similarity_applied,
                     "score": score,
                     "base_score": base_score,
                     "transfer_gate": transfer_gate,
@@ -470,6 +587,15 @@ class MemRLRetriever:
         ]
         intervene.sort(key=lambda item: _safe_float(item.get("evidence_score", 0.0)), reverse=True)
         abstain.sort(key=lambda item: _safe_float(item.get("evidence_score", 0.0)), reverse=True)
+        evidence_mode = _env_choice("KNOWU_MEMRL_EVIDENCE_MODE", "balanced")
+        if evidence_mode in {"support_only", "intervene_only", "positive_only"}:
+            selected = intervene[: self.topk]
+            selected.sort(key=lambda item: _safe_float(item.get("evidence_score", 0.0)), reverse=True)
+            return selected
+        if evidence_mode in {"risk_only", "abstain_only", "negative_only"}:
+            selected = abstain[: self.topk]
+            selected.sort(key=lambda item: _safe_float(item.get("evidence_score", 0.0)), reverse=True)
+            return selected
         if intervene and abstain:
             count = min(self.topk, len(intervene), len(abstain))
             intervene_strength = sum(
@@ -480,9 +606,9 @@ class MemRLRetriever:
                 _safe_float(item.get("evidence_score", 0.0))
                 for item in abstain[:count]
             )
-            if intervene_strength > abstain_strength * 1.5:
+            if intervene_strength > abstain_strength * self.dominance_threshold:
                 selected = intervene[: self.topk]
-            elif abstain_strength > intervene_strength * 1.5:
+            elif abstain_strength > intervene_strength * self.dominance_threshold:
                 selected = abstain[: self.topk]
             else:
                 limit = max(1, int(per_side or max(1, self.topk // 2)))
@@ -813,7 +939,13 @@ class MemRLRetriever:
         signals: dict[str, Any],
     ) -> dict[str, Any]:
         context_family = infer_context_family(observations, signals)
-        query = self._base_query(observations, signals)
+        target_task_family = _target_task_family(query := self._base_query(observations, signals))
+        def same_target_task(item: dict[str, Any]) -> bool:
+            return (
+                not target_task_family
+                or str(item.get("source_task_family") or _memory_task_family(item["memory"]) or "")
+                == target_task_family
+            )
         ranked = self._balanced_evidence(
             self._rerank(self._rank(query), context_family=context_family),
             context_family=context_family,
@@ -823,7 +955,7 @@ class MemRLRetriever:
         bad_intervention = [item for item in ranked if _value_bucket(item["memory"]) == "bad_intervention"]
         missed_help = [item for item in ranked if _value_bucket(item["memory"]) == "missed_help"]
         weak_uncertain = [item for item in ranked if _value_bucket(item["memory"]) == "weak_uncertain"]
-        positives = helpful_positive + missed_help
+        positives = [item for item in (helpful_positive + missed_help) if same_target_task(item)]
         negatives = correct_abstain + bad_intervention
         same_context_positives = [
             item for item in positives
@@ -873,10 +1005,10 @@ class MemRLRetriever:
             "intervene_memory_value": generation_recommendation["intervene_memory_value"],
             "abstain_memory_value": generation_recommendation["abstain_memory_value"],
             "value_aware_examples": {
-                "helpful_positive": [item["memory"] for item in helpful_positive[:3]],
+                "helpful_positive": [item["memory"] for item in positives[:3]],
                 "correct_abstain": [item["memory"] for item in correct_abstain[:3]],
                 "bad_intervention": [item["memory"] for item in bad_intervention[:3]],
-                "missed_help": [item["memory"] for item in missed_help[:3]],
+                "missed_help": [item["memory"] for item in missed_help if same_target_task(item)][:3],
                 "weak_uncertain": [item["memory"] for item in weak_uncertain[:3]],
             },
             "preferred_level": preferred_level,

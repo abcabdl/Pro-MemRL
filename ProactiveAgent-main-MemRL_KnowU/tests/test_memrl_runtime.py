@@ -406,6 +406,54 @@ def test_retriever_keeps_cross_profile_same_task_transfer_for_generation() -> No
     assert prior_without_profile["used_memory_ids"] == ["current-task"]
 
 
+def test_profile_similarity_gate_downweights_cross_profile_same_task(monkeypatch) -> None:
+    low_profile_match = {
+        "memory_id": "low-profile-match",
+        "sample_id": "transfer_stress::student::stress_focus_block_dnd::v0",
+        "source": "test",
+        "domain": "mobile_routine",
+        "observations": [{"event": "profile:student task_family:stress_focus_block_dnd"}],
+        "intent_text": "protected implementation block enable dnd",
+        "context_family": "knowu_profile_task_stress_focus_block_dnd",
+        "action_family": "knowu_profile_task_stress_focus_block_dnd",
+        "candidate": {
+            "purpose": "Protect focus block",
+            "proactive_task": "Enable DND for the focus block.",
+            "response": "I can enable DND now.",
+            "operation": "knowu.routine.stress_focus_block_dnd",
+        },
+        "simulation": {"acceptance": "accept"},
+        "decision": {"should_intervene": True, "commitment_level": 2},
+        "labels": {"profile_id": "student", "task_family": "stress_focus_block_dnd"},
+        "q_value": 0.9,
+    }
+    high_profile_match = {
+        **low_profile_match,
+        "memory_id": "high-profile-match",
+        "sample_id": "transfer_stress::night_creator::stress_focus_block_dnd::v0",
+        "observations": [{"event": "profile:night_creator task_family:stress_focus_block_dnd"}],
+        "labels": {"profile_id": "night_creator", "task_family": "stress_focus_block_dnd"},
+    }
+    retriever = MemRLRetriever(topk=8, sim_threshold=0.0)
+    retriever.build([low_profile_match, high_profile_match])
+    monkeypatch.setenv("KNOWU_MEMRL_USE_PROFILE_SIMILARITY_GATE", "true")
+    retriever._profile_similarity = lambda source_profile, target_profile: {  # type: ignore[method-assign]
+        "student": 0.1,
+        "night_creator": 1.0,
+    }.get(str(source_profile), 1.0)
+
+    ranked = retriever._rank(
+        "profile:developer task_family:stress_focus_block_dnd "
+        "context_family:knowu_profile_task_stress_focus_block_dnd "
+        "protected implementation block enable dnd"
+    )
+
+    assert ranked[0]["memory"]["memory_id"] == "high-profile-match"
+    assert ranked[0]["profile_similarity_applied"] is True
+    assert ranked[1]["memory"]["memory_id"] == "low-profile-match"
+    assert ranked[1]["profile_similarity"] == 0.1
+
+
 def test_generation_candidates_use_only_same_context_positive_examples() -> None:
     wrong_context = {
         "memory_id": "wrong-context",

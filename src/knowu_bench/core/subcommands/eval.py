@@ -195,6 +195,55 @@ def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
         action="store_false",
         help="Disable MemRL memory retrieval/reference and delegate directly to the base GUI executor.",
     )
+    parser.add_argument(
+        "--memrl-similarity-weight",
+        "--memrl_similarity_weight",
+        dest="memrl_similarity_weight",
+        type=float,
+        default=None,
+        help="Sensitivity setting for value-aware retrieval similarity weight.",
+    )
+    parser.add_argument(
+        "--memrl-utility-weight",
+        "--memrl_utility_weight",
+        dest="memrl_utility_weight",
+        type=float,
+        default=None,
+        help="Sensitivity setting for value-aware retrieval utility/Q-value weight.",
+    )
+    parser.add_argument(
+        "--memrl-balance-dominance-threshold",
+        "--memrl_balance_dominance_threshold",
+        dest="memrl_balance_dominance_threshold",
+        type=float,
+        default=None,
+        help="Sensitivity setting for balanced-evidence dominance threshold.",
+    )
+    parser.add_argument(
+        "--memrl-default-cross-profile-gate",
+        "--memrl_default_cross_profile_gate",
+        dest="memrl_default_cross_profile_gate",
+        type=float,
+        default=None,
+        help="Sensitivity setting for the default same-family cross-profile transfer gate.",
+    )
+
+
+def _configure_memrl_sensitivity(args: argparse.Namespace) -> dict[str, float]:
+    mapping = {
+        "memrl_similarity_weight": "KNOWU_MEMRL_SIMILARITY_WEIGHT",
+        "memrl_utility_weight": "KNOWU_MEMRL_UTILITY_WEIGHT",
+        "memrl_balance_dominance_threshold": "KNOWU_MEMRL_BALANCE_DOMINANCE_THRESHOLD",
+        "memrl_default_cross_profile_gate": "KNOWU_MEMRL_DEFAULT_CROSS_PROFILE_GATE",
+    }
+    applied: dict[str, float] = {}
+    for attr, env_name in mapping.items():
+        value = getattr(args, attr, None)
+        if value is None:
+            continue
+        os.environ[env_name] = str(value)
+        applied[attr.removeprefix("memrl_")] = float(value)
+    return applied
 
 
 def configure_parser(subparsers: argparse._SubParsersAction) -> None:
@@ -255,6 +304,7 @@ def configure_parser(subparsers: argparse._SubParsersAction) -> None:
 async def execute(args: argparse.Namespace) -> None:
     """Execute the eval command."""
     log_file_root = args.log_file_root or args.output or "./traj_logs"
+    memrl_sensitivity = _configure_memrl_sensitivity(args)
 
     # Check if running all tasks
     run_all_tasks = args.task and args.task.upper() == "ALL"
@@ -327,6 +377,7 @@ async def execute(args: argparse.Namespace) -> None:
                 "timestamp": datetime.now().isoformat(),
                 "log_file_root": log_file_root,
                 "memrl_use_memory": args.memrl_use_memory,
+                "memrl_sensitivity": memrl_sensitivity,
             },
             "tasks_with_results": task_results,
             "tasks_with_no_results": task_list_with_no_results,
